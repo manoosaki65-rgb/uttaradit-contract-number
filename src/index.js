@@ -66,6 +66,8 @@ export default {
  async fetch(request,env){
   const u=new URL(request.url), p=u.pathname;
   if(!(p==="/api/contracts"||p.startsWith("/api/contracts/"))) return env.ASSETS.fetch(request);
+  const cors={"Access-Control-Allow-Origin":"https://chatgpt.com","Access-Control-Allow-Headers":"Content-Type, X-Registry-Key","Access-Control-Allow-Methods":"GET,POST,PUT,DELETE,OPTIONS"};
+  if(request.method==="OPTIONS") return new Response(null,{headers:cors});
   if(!env.DB) return Response.json({error:"Database DB is not configured"},{status:503});
   const id=p.split("/")[3]||null;
   try{
