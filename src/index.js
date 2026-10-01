@@ -8,7 +8,7 @@ export default {
    id:String(r.id), contract_no:r.contract_number||r.registration_number||"", fiscal_year:r.fiscal_year,
    contract_date:r.contract_date||"", subject:r.subject||"", vendor:r.counterparty_name||"",
    amount:r.contract_value, inventory_no:r.inventory_no||"", buyer:r.responsible_unit||"",
-   fund_source:r.fund_source||"", note:r.note||""
+   fund_source:r.fund_source||"", note:r.notes||r.note||""
   });
   try{
    if(p==="/api/contracts"&&request.method==="GET"){
@@ -21,9 +21,9 @@ export default {
    if(p==="/api/contracts"&&request.method==="POST"){
     const b=await request.json(); if(!b.contract_no||!b.subject)return Response.json({error:"กรุณากรอกเลขที่สัญญาและรายการ"},{status:400});
     const y=Number(b.fiscal_year||2570), now=new Date().toISOString(), no=String(b.contract_no).trim();
-    const reg=no.includes("/")?no.split("/")[0]:no;
+    const reg=no;
     const cols=await env.DB.prepare("PRAGMA table_info(contract_register)").all(); const names=new Set((cols.results||[]).map(x=>x.name));
-    const data={registration_number:reg,contract_number:no,fiscal_year:y,registered_date:String(b.contract_date||""),contract_date:String(b.contract_date||""),subject:String(b.subject||""),counterparty_name:String(b.vendor||""),responsible_unit:String(b.buyer||""),contract_value:b.amount===""||b.amount==null?null:Number(b.amount),inventory_no:String(b.inventory_no||""),fund_source:String(b.fund_source||""),note:String(b.note||""),created_at:now,updated_at:now};
+    const data={id:crypto.randomUUID(),registration_number:reg,contract_number:no,fiscal_year:y,registered_date:String(b.contract_date||new Date().toISOString().slice(0,10)),contract_date:String(b.contract_date||""),subject:String(b.subject||""),counterparty_name:String(b.vendor||""),responsible_unit:String(b.buyer||""),contract_value:b.amount===""||b.amount==null?null:Number(b.amount),inventory_no:String(b.inventory_no||""),fund_source:String(b.fund_source||""),notes:String(b.note||""),source_system:"cloudflare-ui",created_at:now,updated_at:now};
     const keys=Object.keys(data).filter(k=>names.has(k)); const vals=keys.map(k=>data[k]);
     await env.DB.prepare(`INSERT INTO contract_register (${keys.join(",")}) VALUES (${keys.map(()=>"?").join(",")})`).bind(...vals).run();
     const row=await env.DB.prepare("SELECT * FROM contract_register WHERE fiscal_year=? AND contract_number=? ORDER BY id DESC LIMIT 1").bind(y,no).first();
