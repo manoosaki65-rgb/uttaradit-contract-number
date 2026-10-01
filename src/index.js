@@ -7,7 +7,7 @@ async function schema(env){
 }
 function out(r={}){
   return {
-    id:String(r.id??r.rowid??""),
+    id:String(r.id??r._rowid??r.rowid??""),
     contract_no:r.contract_number||r.registration_number||"",
     fiscal_year:r.fiscal_year,
     contract_date:r.contract_date||r.registered_date||"",
@@ -74,7 +74,7 @@ export default {
    if(p==="/api/contracts"&&request.method==="GET"){
     const y=Number(u.searchParams.get("year")||2570);
     const order=names.has("id")?"id DESC":"rowid DESC";
-    const {results=[]}=await env.DB.prepare(`SELECT * FROM contract_register WHERE fiscal_year=? ORDER BY ${order}`).bind(y).all();
+    const {results=[]}=await env.DB.prepare(`SELECT rowid AS _rowid, * FROM contract_register WHERE fiscal_year=? ORDER BY ${order}`).bind(y).all();
     let next=1;
     for(const r of results){
       const s=text(r.contract_number||r.registration_number||"");
