@@ -108,8 +108,14 @@ export default {
     return Response.json({item:out(row)});
    }
    if(id&&request.method==="DELETE"){
-    await env.DB.prepare("DELETE FROM contract_register WHERE id=?").bind(id).run();
-    return Response.json({ok:true});
+    let r=await env.DB.prepare("DELETE FROM contract_register WHERE id=?").bind(id).run();
+    let changes=Number(r.meta?.changes||0);
+    if(!changes){
+      r=await env.DB.prepare("DELETE FROM contract_register WHERE rowid=?").bind(id).run();
+      changes=Number(r.meta?.changes||0);
+    }
+    if(!changes) return Response.json({error:"ไม่พบรายการที่จะลบ"},{status:404});
+    return Response.json({ok:true,changes});
    }
    return Response.json({error:"Method not allowed"},{status:405});
   }catch(e){
