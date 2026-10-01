@@ -1,0 +1,1 @@
+ALTER TABLE contract_numbers ADD COLUMN IF NOT EXISTS fund_source TEXT NOT NULL DEFAULT '';
