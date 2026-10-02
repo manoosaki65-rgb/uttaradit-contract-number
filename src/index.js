@@ -8,7 +8,7 @@ async function schema(env){
 function out(r={}){
   return {
     id:String(r.id??r._rowid??r.rowid??""),
-    contract_no:r.contract_number||r.registration_number||"",
+    contract_no:(()=>{const v=r.contract_number||r.registration_number||"";return String(v).startsWith("PENDING-")?"":v;})(),
     fiscal_year:r.fiscal_year,
     contract_date:r.contract_date||r.registered_date||"",
     subject:r.subject||"",
@@ -22,7 +22,8 @@ function out(r={}){
 }
 function mappedData(b, cols){
   const now=new Date().toISOString();
-  const no=text(b.contract_no).trim();
+  const rawNo=text(b.contract_no).trim();
+  const no=rawNo || `PENDING-${crypto.randomUUID()}`;
   const y=Number(b.fiscal_year||2570);
   const today=now.slice(0,10);
   const data={
@@ -87,7 +88,7 @@ export default {
    }
    if(p==="/api/contracts"&&request.method==="POST"){
     const b=await request.json();
-    if(!b.contract_no||!b.subject) return Response.json({error:"กรุณากรอกเลขที่สัญญาและรายการ"},{status:400});
+    if(!b.subject) return Response.json({error:"กรุณากรอกรายการ"},{status:400});
     const data=mappedData(b,cols);
     const keys=Object.keys(data).filter(k=>names.has(k));
     if(!keys.length) return Response.json({error:"ไม่พบคอลัมน์ที่รองรับในตาราง contract_register"},{status:500});
@@ -100,7 +101,7 @@ export default {
    }
    if(id&&request.method==="PUT"){
     const b=await request.json();
-    if(!b.contract_no||!b.subject) return Response.json({error:"กรุณากรอกเลขที่สัญญาและรายการ"},{status:400});
+    if(!b.subject) return Response.json({error:"กรุณากรอกรายการ"},{status:400});
     const data=mappedData(b,cols);
     delete data.id; delete data.created_at;
     const keys=Object.keys(data).filter(k=>names.has(k));
