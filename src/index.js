@@ -76,7 +76,7 @@ export default {
    const names=new Set(cols.map(c=>c.name));
    if(p==="/api/contracts"&&request.method==="GET"){
     const y=Number(u.searchParams.get("year")||2570);
-    const order=names.has("id")?"id DESC":"rowid DESC";
+    const order="rowid DESC";
     const {results=[]}=await env.DB.prepare(`SELECT rowid AS _rowid, * FROM contract_register WHERE fiscal_year=? ORDER BY ${order}`).bind(y).all();
     let next=1;
     for(const r of results){
