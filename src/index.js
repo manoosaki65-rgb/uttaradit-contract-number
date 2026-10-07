@@ -62,6 +62,24 @@ function mappedData(b, cols){
   }
   return data;
 }
+async function syncMaster(env,action,item){
+  if(!env.MASTER_SYNC_URL)return {ok:false,skipped:true};
+  let lastError="";
+  for(let attempt=1;attempt<=3;attempt++){
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),8000);
+    try{
+      const response=await fetch(env.MASTER_SYNC_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token:env.MASTER_SYNC_TOKEN||"",system:"contract",action,item}),signal:controller.signal,redirect:"follow"});
+      const body=await response.text();
+      clearTimeout(timer);
+      if(response.ok)return {ok:true};
+      lastError=`HTTP ${response.status}: ${body.slice(0,180)}`;
+    }catch(e){clearTimeout(timer);lastError=String(e?.message||e);}
+    if(attempt<3)await new Promise(r=>setTimeout(r,250*attempt));
+  }
+  console.error("Master sync failed:",lastError);
+  return {ok:false,error:lastError};
+}
 
 export default {
  async fetch(request,env){
@@ -97,7 +115,9 @@ export default {
     const row=names.has("id")&&data.id
       ? await env.DB.prepare("SELECT * FROM contract_register WHERE id=? LIMIT 1").bind(data.id).first()
       : await env.DB.prepare("SELECT * FROM contract_register ORDER BY rowid DESC LIMIT 1").first();
-    return Response.json({item:out(row)},{status:201});
+    const item=out(row);
+    const master=await syncMaster(env,"upsert",item);
+    return Response.json({item,master_sync:master.ok,master_warning:master.ok?null:"บันทึกทะเบียนแล้ว แต่ Master Google Sheet ยังไม่ซิงก์"},{status:201});
    }
    if(id&&request.method==="PUT"){
     const b=await request.json();
@@ -108,7 +128,9 @@ export default {
     const vals=keys.map(k=>data[k]);
     await env.DB.prepare(`UPDATE contract_register SET ${keys.map(k=>'"'+k+'"=?').join(",")} WHERE id=?`).bind(...vals,id).run();
     const row=await env.DB.prepare("SELECT * FROM contract_register WHERE id=? LIMIT 1").bind(id).first();
-    return Response.json({item:out(row)});
+    const item=out(row);
+    const master=await syncMaster(env,"upsert",item);
+    return Response.json({item,master_sync:master.ok,master_warning:master.ok?null:"แก้ไขทะเบียนแล้ว แต่ Master Google Sheet ยังไม่ซิงก์"});
    }
    if(id&&request.method==="DELETE"){
     let r=await env.DB.prepare("DELETE FROM contract_register WHERE id=?").bind(id).run();
