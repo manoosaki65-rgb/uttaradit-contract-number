@@ -63,17 +63,22 @@ function mappedData(b, cols){
   return data;
 }
 async function syncMaster(env,action,item){
-  if(!env.MASTER_SYNC_URL)return {ok:false,skipped:true};
+  if(!env.MASTER_SYNC_URL||!env.MASTER_SYNC_TOKEN)return {ok:false,skipped:true};
   let lastError="";
   for(let attempt=1;attempt<=3;attempt++){
     const controller=new AbortController();
-    const timer=setTimeout(()=>controller.abort(),8000);
+    const timer=setTimeout(()=>controller.abort(),30000);
     try{
       const response=await fetch(env.MASTER_SYNC_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token:env.MASTER_SYNC_TOKEN||"",system:"contract",action,item}),signal:controller.signal,redirect:"follow"});
       const body=await response.text();
       clearTimeout(timer);
-      if(response.ok)return {ok:true};
-      lastError=`HTTP ${response.status}: ${body.slice(0,180)}`;
+      let receipt;
+      try{receipt=JSON.parse(body);}catch{receipt=null;}
+      if(response.ok && receipt?.ok===true && receipt.system==="contract" &&
+         receipt.id===String(item.id) && receipt.verified===true &&
+         receipt.spreadsheet_id==="1eFV9JbOBkTYeg25vyVxiiZ8MA7KadHh7EHg03fodeHQ" &&
+         receipt.sheet==="สัญญา 70")return {ok:true};
+      lastError=response.ok?"Master did not confirm verified contract write":`Master HTTP ${response.status}`;
     }catch(e){clearTimeout(timer);lastError=String(e?.message||e);}
     if(attempt<3)await new Promise(r=>setTimeout(r,250*attempt));
   }

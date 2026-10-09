@@ -3,6 +3,9 @@
   "name": "uttaradit-contract-number",
   "main": "src/index.js",
   "compatibility_date": "2026-10-01",
+  "vars": {
+    "MASTER_SYNC_URL": "https://script.google.com/macros/s/AKfycbwls2UG4DvqjTFCTvY09lcJrTKc7ItB8LXOe_hfQwq9p7pwQ_wWDvUFjhNR_BBLu_BV/exec"
+  },
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
