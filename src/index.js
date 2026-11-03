@@ -2,7 +2,15 @@ const text=v=>String(v??"");
 const num=v=>v===""||v==null?null:Number(v);
 
 async function schema(env){
-  const {results=[]}=await env.DB.prepare("PRAGMA table_info(contract_register)").all();
+  let {results=[]}=await env.DB.prepare("PRAGMA table_info(contract_register)").all();
+  if(!results.some(c=>c.name==="contract_duration")){
+    try{await env.DB.prepare("ALTER TABLE contract_register ADD COLUMN contract_duration TEXT").run();}
+    catch(e){
+      const s=String(e?.message||e);
+      if(!s.toLowerCase().includes("duplicate column")) throw e;
+    }
+    ({results=[]}=await env.DB.prepare("PRAGMA table_info(contract_register)").all());
+  }
   return results;
 }
 function out(r={}){
@@ -11,6 +19,7 @@ function out(r={}){
     contract_no:(()=>{const v=r.contract_number||r.registration_number||"";return String(v).startsWith("PENDING-")?"":v;})(),
     fiscal_year:r.fiscal_year,
     contract_date:r.contract_date||r.registered_date||"",
+    duration:r.contract_duration||r.duration||"",
     subject:r.subject||"",
     vendor:r.counterparty_name||r.vendor||"",
     amount:r.contract_value??r.amount??null,
@@ -32,6 +41,7 @@ function mappedData(b, cols){
     fiscal_year:y,
     registered_date:text(b.contract_date||today),
     contract_date:text(b.contract_date||""),
+    contract_duration:text(b.duration||""),
     subject:text(b.subject||""),
     counterparty_name:text(b.vendor||""),
     vendor:text(b.vendor||""),
