@@ -18,7 +18,7 @@ async function schema(env){
       catch(e) { if (!String(e?.message||e).toLowerCase().includes("duplicate column")) throw e; }
     }
   }
-  return results;
+  return (await env.DB.prepare("PRAGMA table_info(contract_register)").all()).results||results;
 }
 function out(r={}){
   return {
