@@ -1,3 +1,4 @@
+import {ensureAttachmentSchema, filesForRows, handleAttachmentRequest} from "./attachments.js";
 const text=v=>String(v??"");
 const num=v=>v===""||v==null?null:Number(v);
 
@@ -10,6 +11,12 @@ async function schema(env){
       if(!s.toLowerCase().includes("duplicate column")) throw e;
     }
     ({results=[]}=await env.DB.prepare("PRAGMA table_info(contract_register)").all());
+  }
+  for (const name of ["attachment_url","attachment_name"]) {
+    if (!results.some(c=>c.name===name)) {
+      try { await env.DB.prepare("ALTER TABLE contract_register ADD COLUMN "+name+" TEXT").run(); }
+      catch(e) { if (!String(e?.message||e).toLowerCase().includes("duplicate column")) throw e; }
+    }
   }
   return results;
 }
@@ -26,7 +33,9 @@ function out(r={}){
     inventory_no:r.inventory_no||"",
     buyer:r.responsible_unit||r.buyer||"",
     fund_source:r.fund_source||"",
-    note:r.notes||r.note||""
+    note:r.notes||r.note||"",
+    attachment_url:r.attachment_url||"",
+    attachment_name:r.attachment_name||""
   };
 }
 function mappedData(b, cols){
@@ -53,6 +62,8 @@ function mappedData(b, cols){
     fund_source:text(b.fund_source||""),
     notes:text(b.note||""),
     note:text(b.note||""),
+    attachment_url:text(b.attachment_url||"").trim(),
+    attachment_name:text(b.attachment_name||"").trim(),
     source_system:"cloudflare-ui",
     created_at:now,
     updated_at:now
@@ -100,12 +111,15 @@ export default {
  async fetch(request,env){
   const u=new URL(request.url), p=u.pathname;
   if(!(p==="/api/contracts"||p.startsWith("/api/contracts/"))) return env.ASSETS.fetch(request);
-  const cors={"Access-Control-Allow-Origin":"https://chatgpt.com","Access-Control-Allow-Headers":"Content-Type, X-Registry-Key","Access-Control-Allow-Methods":"GET,POST,PUT,DELETE,OPTIONS"};
+  const cors={"Access-Control-Allow-Origin":"https://chatgpt.com","Access-Control-Allow-Headers":"Content-Type, X-Registry-Key, X-Contract-File-Key","Access-Control-Allow-Methods":"GET,POST,PUT,DELETE,OPTIONS"};
   if(request.method==="OPTIONS") return new Response(null,{headers:cors});
   if(!env.DB) return Response.json({error:"Database DB is not configured"},{status:503});
   const id=p.split("/")[3]||null;
   try{
    const cols=await schema(env);
+   await ensureAttachmentSchema(env);
+   const handled=await handleAttachmentRequest(request,env,p);
+   if(handled)return handled;
    const names=new Set(cols.map(c=>c.name));
    if(p==="/api/contracts"&&request.method==="GET"){
     const y=Number(u.searchParams.get("year")||2570);
@@ -117,11 +131,12 @@ export default {
       const n=parseInt(s.split("/")[0],10);
       if(Number.isFinite(n)&&n>=next) next=n+1;
     }
-    return Response.json({items:results.map(out),next,year:y});
+    return Response.json({items:await filesForRows(env,results.map(out)),next,year:y});
    }
    if(p==="/api/contracts"&&request.method==="POST"){
     const b=await request.json();
     if(!b.subject) return Response.json({error:"กรุณากรอกรายการ"},{status:400});
+    if(b.attachment_url&&!/^https:\/\//i.test(String(b.attachment_url).trim()))return Response.json({error:"ลิงก์เอกสารต้องขึ้นต้นด้วย https://"}, {status:400});
     const data=mappedData(b,cols);
     const keys=Object.keys(data).filter(k=>names.has(k));
     if(!keys.length) return Response.json({error:"ไม่พบคอลัมน์ที่รองรับในตาราง contract_register"},{status:500});
@@ -137,6 +152,7 @@ export default {
    if(id&&request.method==="PUT"){
     const b=await request.json();
     if(!b.subject) return Response.json({error:"กรุณากรอกรายการ"},{status:400});
+    if(b.attachment_url&&!/^https:\/\//i.test(String(b.attachment_url).trim()))return Response.json({error:"ลิงก์เอกสารต้องขึ้นต้นด้วย https://"}, {status:400});
     const data=mappedData(b,cols);
     delete data.id; delete data.created_at;
     const keys=Object.keys(data).filter(k=>names.has(k));
@@ -148,6 +164,8 @@ export default {
     return Response.json({item,master_sync:master.ok,master_warning:master.ok?null:"แก้ไขทะเบียนแล้ว แต่ Master Google Sheet ยังไม่ซิงก์"});
    }
    if(id&&request.method==="DELETE"){
+    const n=await env.DB.prepare("SELECT COUNT(*) AS n FROM contract_files WHERE contract_id=?").bind(id).first();
+    if(Number(n?.n||0)>0)return Response.json({error:"กรุณาลบไฟล์แนบสัญญาก่อนลบรายการ เพื่อไม่ให้ไฟล์ตกค้าง"},{status:409});
     let r=await env.DB.prepare("DELETE FROM contract_register WHERE id=?").bind(id).run();
     let changes=Number(r.meta?.changes||0);
     if(!changes){
