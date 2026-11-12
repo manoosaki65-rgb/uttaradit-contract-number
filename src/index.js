@@ -149,6 +149,23 @@ export default {
     const master=await syncMaster(env,"upsert",item);
     return Response.json({item,master_sync:master.ok,master_warning:master.ok?null:"บันทึกทะเบียนแล้ว แต่ Master Google Sheet ยังไม่ซิงก์"},{status:201});
    }
+   // Update a contract document link without rewriting the other contract fields.
+   if(id&&p==="/api/contracts/"+encodeURIComponent(id)+"/attachment"&&request.method==="PATCH"){
+     const existing=await env.DB.prepare("SELECT * FROM contract_register WHERE CAST(id AS TEXT)=? LIMIT 1").bind(id).first();
+     if(!existing)return Response.json({error:"ไม่พบรายการสัญญา"},{status:404});
+     if(Number(existing.fiscal_year)!==2570)return Response.json({error:"รองรับเฉพาะสัญญาปี 2570"},{status:403});
+     const b=await request.json();
+     const link=text(b.attachment_url).trim();
+     const name=text(b.attachment_name).trim();
+     if(!/^https:\/\//i.test(link))return Response.json({error:"กรุณาใส่ลิงก์ HTTPS ของเอกสาร"},{status:400});
+     if(link.length>2048||name.length>240)return Response.json({error:"ลิงก์หรือชื่อไฟล์ยาวเกินกำหนด"},{status:400});
+     await env.DB.prepare("UPDATE contract_register SET attachment_url=?, attachment_name=?, updated_at=? WHERE CAST(id AS TEXT)=?")
+       .bind(link,name,new Date().toISOString(),id).run();
+     const row=await env.DB.prepare("SELECT * FROM contract_register WHERE CAST(id AS TEXT)=? LIMIT 1").bind(id).first();
+     const item=out(row);
+     const master=await syncMaster(env,"upsert",item);
+     return Response.json({item,master_sync:master.ok,master_warning:master.ok?null:"บันทึกลิงก์ในทะเบียนแล้ว แต่ Master Google Sheet ยังไม่ซิงก์"});
+   }
    if(id&&request.method==="PUT"){
     const b=await request.json();
     if(!b.subject) return Response.json({error:"กรุณากรอกรายการ"},{status:400});
