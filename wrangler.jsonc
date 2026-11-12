@@ -9,13 +9,21 @@
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": [
+      "/api/*"
+    ]
   },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "uttaradit-contract-registry-db",
       "database_id": "24e5219f-d220-4a2e-b121-cae225a52589"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "CONTRACT_FILES",
+      "bucket_name": "uttaradit-contract-documents-2570"
     }
   ]
 }
