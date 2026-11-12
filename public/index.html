@@ -4,7 +4,10 @@
 
 [hidden]{display:none!important}
 .attach-btn{border:1px solid #b5cae5;background:#edf5ff;color:#16467b;padding:6px 9px;border-radius:7px;font-weight:bold;cursor:pointer;white-space:nowrap}
-.attach-btn:hover{background:#dbeafe}.attach-btn:focus-visible{outline:3px solid #2669b3;outline-offset:2px}
+.attach-btn:hover{background:#dbeafe}
+.contract-dropzone{position:relative;min-width:130px;outline-offset:-3px}
+.contract-dropzone.file-over{background:#d9efff;outline:3px dashed #2563eb;border-radius:6px}
+.drop-hint{display:block;font-size:11px;color:#667085;margin-top:4px}.attach-btn:focus-visible{outline:3px solid #2669b3;outline-offset:2px}
 .quick-shade{position:fixed;inset:0;background:#18223599;display:flex;justify-content:center;align-items:center;z-index:100;padding:15px}
 .quick-panel{width:min(540px,100%);max-height:90vh;overflow:auto;background:white;border-radius:14px;padding:20px;box-shadow:0 14px 40px #0004}
 .quick-panel h3{margin:0 0 8px}.quick-panel label{display:block;margin-top:12px}
@@ -62,25 +65,26 @@ function docsHtml(x){
    docs.push('<button class="btn ghost mini" type="button" onclick="openContractFile(\''+esc(x.id)+'\',\''+esc(f.id)+'\')">📎 '+esc(f.file_name)+'</button>');
  }
  const btn='<button type="button" class="attach-btn" onclick="quickAttach(\''+esc(x.id)+'\')">📎 '+(docs.length?'เพิ่มเอกสาร':'แนบเอกสาร')+'</button>';
- return docs.join("")+btn;
+ return docs.join("")+btn+(UPLOAD_ENABLED?'<small class="drop-hint">ลาก PDF/Word มาวางได้</small>':'');
 }
 
-let QUICK_ID=null,QUICK_BUSY=false;
+let QUICK_ID=null,QUICK_BUSY=false,PENDING_FILES=[];
 function quickMessage(m){$("quickStatus").textContent=m||"";}
 function quickAttach(id){
  const x=ALL.find(a=>String(a.id)===String(id));if(!x)return;
  QUICK_ID=String(id);$("quickDialog").hidden=false;
  $("quickSubject").textContent=(x.contract_no||"รอออกเลข")+" — "+(x.subject||"");
  $("quickLink").value=x.attachment_url||"";$("quickName").value=x.attachment_name||"";
- $("quickKey").value=$("file_key").value||"";$("quickFiles").value="";$("quickRetry").hidden=true;
+ $("quickKey").value=$("file_key").value||"";$("quickFiles").value="";PENDING_FILES=[];$("quickRetry").hidden=true;
  $("quickPick").disabled=!UPLOAD_ENABLED;$("quickKeyLabel").hidden=!UPLOAD_ENABLED;
  $("quickHint").textContent=UPLOAD_ENABLED?"เลือกไฟล์ PDF/Word ได้หลายไฟล์ ไม่เกิน 15 MB ต่อไฟล์":"พื้นที่เก็บไฟล์จากเครื่อง (R2) ยังไม่เปิดใช้งาน ใช้ลิงก์ Google Drive ด้านล่างได้ก่อน";
  quickMessage("");if(!UPLOAD_ENABLED)$("quickLink").focus();
 }
-function closeQuick(){if(QUICK_BUSY)return;$("quickDialog").hidden=true;QUICK_ID=null;$("quickFiles").value="";}
-async function quickUpload(){
+function closeQuick(){if(QUICK_BUSY)return;$("quickDialog").hidden=true;QUICK_ID=null;$("quickFiles").value="";PENDING_FILES=[];}
+async function quickUpload(filesOverride){
  if(QUICK_BUSY||!QUICK_ID||!UPLOAD_ENABLED)return;
- const files=Array.from($("quickFiles").files||[]);
+ const files=Array.isArray(filesOverride)?filesOverride:(PENDING_FILES.length?PENDING_FILES:Array.from($("quickFiles").files||[]));
+ PENDING_FILES=files;
  if(!files.length){quickMessage("กรุณาเลือกไฟล์");return;}
  if(files.some(f=>f.size<1||f.size>15*1024*1024||!/\.(pdf|doc|docx)$/i.test(f.name))){quickMessage("รองรับ PDF/Word ขนาดไม่เกิน 15 MB ต่อไฟล์");return;}
  const key=$("quickKey").value.trim();
@@ -114,10 +118,39 @@ async function quickSaveLink(){
  finally{$("quickSave").disabled=false;}
 }
 $("quickPick").onclick=()=>{if(UPLOAD_ENABLED)$("quickFiles").click()};
-$("quickFiles").onchange=()=>{if($("quickFiles").files.length)quickUpload()};
-$("quickRetry").onclick=quickUpload;$("quickSave").onclick=quickSaveLink;$("quickClose").onclick=closeQuick;
+$("quickFiles").onchange=()=>{if($("quickFiles").files.length)quickUpload(Array.from($("quickFiles").files))};
+$("quickRetry").onclick=()=>quickUpload();$("quickSave").onclick=quickSaveLink;$("quickClose").onclick=closeQuick;
 $("quickDialog").onclick=e=>{if(e.target===$("quickDialog"))closeQuick()};
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("quickDialog").hidden)closeQuick()});
+
+let ACTIVE_DROP=null;
+function contractDropCell(el){return el&&el.closest?el.closest("td.contract-dropzone[data-contract-id]"):null;}
+function clearContractDrop(){if(ACTIVE_DROP){ACTIVE_DROP.classList.remove("file-over");ACTIVE_DROP=null;}}
+$("rows").addEventListener("dragover",e=>{
+ if(!e.dataTransfer||!Array.from(e.dataTransfer.types||[]).includes("Files"))return;
+ const cell=contractDropCell(e.target);if(!cell)return;
+ e.preventDefault();e.dataTransfer.dropEffect="copy";
+ if(ACTIVE_DROP!==cell){clearContractDrop();ACTIVE_DROP=cell;cell.classList.add("file-over");}
+});
+$("rows").addEventListener("dragleave",e=>{
+ if(ACTIVE_DROP&&!ACTIVE_DROP.contains(e.relatedTarget))clearContractDrop();
+});
+$("rows").addEventListener("drop",e=>{
+ const cell=contractDropCell(e.target);
+ if(!cell||!e.dataTransfer)return;
+ e.preventDefault();e.stopPropagation();clearContractDrop();
+ const files=Array.from(e.dataTransfer.files||[]);
+ if(!files.length)return;
+ quickAttach(cell.dataset.contractId);
+ if(!UPLOAD_ENABLED){
+  quickMessage("ไฟล์ที่ลากมายังไม่ได้บันทึก: พื้นที่เก็บไฟล์ Cloudflare R2 ยังไม่เปิดใช้งาน กรุณาเปิดระบบรับไฟล์ก่อน หรืออัปโหลดไฟล์ไป Google Drive แล้ววางลิงก์แทน");
+  return;
+ }
+ PENDING_FILES=files;
+ quickUpload(files);
+});
+document.addEventListener("dragover",e=>{if(e.dataTransfer&&Array.from(e.dataTransfer.types||[]).includes("Files"))e.preventDefault()});
+document.addEventListener("drop",e=>{if(e.dataTransfer&&Array.from(e.dataTransfer.types||[]).includes("Files")&&!contractDropCell(e.target))e.preventDefault()});
 async function checkUpload(){
  try{
    const r=await fetch("/api/contracts/attachment-status");
@@ -128,6 +161,7 @@ async function checkUpload(){
    $("uploadStatus").textContent=UPLOAD_ENABLED?
      "เลือกได้หลายไฟล์ ไฟล์ละไม่เกิน 15 MB; ต้องกรอกรหัสแนบไฟล์":
      "ยังไม่เปิดพื้นที่จัดเก็บไฟล์จากเครื่อง: ใช้ลิงก์ Google Drive ด้านบนได้ก่อน";
+   render();
  }catch(e){$("uploadStatus").textContent="ตรวจสอบพื้นที่เก็บไฟล์ไม่สำเร็จ ใช้ลิงก์ Google Drive ได้";}
 }
 async function openContractFile(id,fileId){
@@ -156,7 +190,7 @@ function showCurrentFiles(x){
  '<div>📎 '+esc(f.file_name)+' <button type="button" class="btn danger mini" onclick="removeContractFile(\''+esc(x.id)+'\',\''+esc(f.id)+'\')">ลบไฟล์</button></div>'
  ).join("");
 }
-function render(){let q=$("search").value.trim().toLowerCase();let a=ALL.filter(x=>[x.contract_no,x.subject,x.vendor,x.inventory_no,x.buyer,x.duration,x.fund_source].join(" ").toLowerCase().includes(q));$("rows").innerHTML=a.length?a.map(x=>`<tr><td class="no">${x.contract_no?esc(x.contract_no):"<span class=\"muted\">รอออกเลข</span>"}</td><td>${esc(x.contract_date)}</td><td>${esc(x.duration)}</td><td>${esc(x.subject)}<div class="muted">${esc(x.note)}</div></td><td>${esc(x.vendor)}</td><td class="right">${money(x.amount)}</td><td>${esc(x.inventory_no)}</td><td>${esc(x.buyer)}</td><td>${esc(x.fund_source)}</td><td class="documents">${docsHtml(x)}</td><td><button class="btn ghost mini" onclick="editRow('${x.id}')">แก้ไข</button></td></tr>`).join(""):'<tr><td colspan="11" class="muted">ยังไม่มีรายการในปีนี้</td></tr>';$("count").textContent=ALL.length.toLocaleString("th-TH")}
+function render(){let q=$("search").value.trim().toLowerCase();let a=ALL.filter(x=>[x.contract_no,x.subject,x.vendor,x.inventory_no,x.buyer,x.duration,x.fund_source].join(" ").toLowerCase().includes(q));$("rows").innerHTML=a.length?a.map(x=>`<tr><td class="no">${x.contract_no?esc(x.contract_no):"<span class=\"muted\">รอออกเลข</span>"}</td><td>${esc(x.contract_date)}</td><td>${esc(x.duration)}</td><td>${esc(x.subject)}<div class="muted">${esc(x.note)}</div></td><td>${esc(x.vendor)}</td><td class="right">${money(x.amount)}</td><td>${esc(x.inventory_no)}</td><td>${esc(x.buyer)}</td><td>${esc(x.fund_source)}</td><td class="documents contract-dropzone" data-contract-id="${esc(x.id)}">${docsHtml(x)}</td><td><button class="btn ghost mini" onclick="editRow('${x.id}')">แก้ไข</button></td></tr>`).join(""):'<tr><td colspan="11" class="muted">ยังไม่มีรายการในปีนี้</td></tr>';$("count").textContent=ALL.length.toLocaleString("th-TH")}
 async function load(){let y=2570;try{let r=await fetch("/api/contracts?year="+y);let j=await r.json();ALL=j.items||[];$("yearCard").textContent=y;if(!EDIT)$("contract_no").placeholder="รอออกเลข";render()}catch(e){$("status").textContent="กำลังเชื่อมฐานข้อมูล";render()}}
 function editRow(id){let x=ALL.find(v=>v.id===id);if(!x)return;EDIT=id;$("contractNoField").style.display="block";["contract_no","contract_date","duration","subject","vendor","inventory_no","buyer","fund_source","note"].forEach(k=>$(k).value=x[k]||"");$("amount").value=x.amount??"";$("attachment_url").value=x.attachment_url||"";$("attachment_name").value=x.attachment_name||"";showCurrentFiles(x);$("formTitle").textContent="แก้ไขรายการ "+(x.contract_no||"รอออกเลข");$("cancel").style.display="inline-block";$("deleteEdit").style.display="inline-block";scrollTo({top:120,behavior:"smooth"})}
 function reset(){EDIT=null;const k=$("file_key").value;$("form").reset();$("file_key").value=k;$("currentFiles").innerHTML="";$("contractNoField").style.display="none";$("formTitle").textContent="เพิ่มรายการรอออกเลขสัญญา";$("cancel").style.display="none";$("deleteEdit").style.display="none"}
