@@ -4,6 +4,6 @@
 - ต้องส่งก่อนรับ; แต่ละขั้นตอนบันทึกได้ครั้งเดียว; เวลาอิง server แสดงตาม Asia/Bangkok
 - ระบบรักษาลิงก์เอกสาร PDF และปุ่มแนบเอกสารเดิม
 - API: PATCH /api/contracts/:id/workflow, body action=send หรือ receive
-- ต้องตั้งค่า Cloudflare Worker secrets: CONTRACT_SEND_KEY และ CONTRACT_RECEIVE_KEY (คนละค่า) ก่อนใช้งานปุ่ม
+- ต้องตั้งค่า Cloudflare Worker secrets: CONTRACT_RECEIVE_KEY เพียงค่าเดียว (สำหรับผู้รับสัญญา) ก่อนใช้งานปุ่ม
 - ตรวจสอบการเชื่อม Deploy จาก GitHub กับ Worker จริง และทดสอบก่อน merge / deploy
 - วันที่ส่ง/รับยังบันทึกเฉพาะ D1; Master Google Sheet ยังไม่ได้เพิ่มคอลัมน์สำหรับวันที่ส่ง/รับ
