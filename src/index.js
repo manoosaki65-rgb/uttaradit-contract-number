@@ -164,10 +164,12 @@ export default {
      const b=await request.json();
      const action=b.action;
      if(action!=="send" && action!=="receive") return Response.json({error:"ขั้นตอนไม่ถูกต้อง"},{status:400});
-     const requiredKey=action==="send"?env.CONTRACT_SEND_KEY:env.CONTRACT_RECEIVE_KEY;
-     if(!requiredKey) return Response.json({error:"ยังไม่ได้ตั้งรหัสสิทธิ์ส่ง/รับสัญญาในระบบ"},{status:503});
-     if(request.headers.get("X-Contract-Workflow-Key")!==requiredKey)
-       return Response.json({error:"รหัสสำหรับขั้นตอนนี้ไม่ถูกต้อง"},{status:403});
+     // Staff may mark a contract as sent. Receiving is restricted to the supplies officer.
+     if(action==="receive"){
+       if(!env.CONTRACT_RECEIVE_KEY) return Response.json({error:"ยังไม่ได้ตั้งรหัสสิทธิ์รับสัญญาในระบบ"},{status:503});
+       if(request.headers.get("X-Contract-Workflow-Key")!==env.CONTRACT_RECEIVE_KEY)
+         return Response.json({error:"รหัสรับสัญญาไม่ถูกต้อง"},{status:403});
+     }
      const existing=await env.DB.prepare("SELECT * FROM contract_register WHERE CAST(id AS TEXT)=? LIMIT 1").bind(id).first();
      if(!existing) return Response.json({error:"ไม่พบรายการสัญญา"},{status:404});
      if(Number(existing.fiscal_year)!==2570) return Response.json({error:"รองรับเฉพาะปี 2570"},{status:403});
