@@ -196,7 +196,7 @@ function workflowCell(x,action){
  const stamp=action==="send"?x.sent_at:x.received_at;
  if(stamp)return '<div class="workflow-done">✓ '+(action==="send"?"ส่งแล้ว":"รับแล้ว")+'<div class="workflow-date">'+esc(workflowDate(stamp))+'</div></div>';
  if(action==="receive"&&!x.sent_at)return '<span class="workflow-wait">—</span>';
- return '<button class="btn '+(action==="send"?"workflow-send":"workflow-receive")+'" type="button" onclick="contractWorkflow('+JSON.stringify(String(x.id))+','+JSON.stringify(action)+')">'+(action==="send"?"➤ ส่งสัญญา":"✓ รับสัญญา")+'</button>';
+ return '<button class="btn '+(action==="send"?"workflow-send":"workflow-receive")+'" type="button" onclick="contractWorkflow(&quot;'+esc(String(x.id))+'&quot;,&quot;'+action+'&quot;)">'+(action==="send"?"➤ ส่งสัญญา":"✓ รับสัญญา")+'</button>';
 }
 async function contractWorkflow(id,action){
  const x=ALL.find(y=>String(y.id)===String(id));if(!x)return;
