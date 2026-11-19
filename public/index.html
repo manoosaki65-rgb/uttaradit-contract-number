@@ -202,10 +202,15 @@ async function contractWorkflow(id,action){
  const x=ALL.find(y=>String(y.id)===String(id));if(!x)return;
  const label=action==="send"?"ส่งสัญญา (จัดซื้อ)":"รับสัญญา (พัสดุ)";
  if(!confirm("ยืนยัน"+label+" เลขที่ "+(x.contract_no||"รอออกเลข")+"? ระบบจะบันทึกวันและเวลาจริงและไม่ให้กดซ้ำ"))return;
- const key=prompt("กรุณากรอกรหัสสิทธิ์"+label+" (ไม่ใช่รหัส Google Drive)");
- if(!key)return;
+ let key="";
+ if(action==="receive"){
+   key=prompt("กรุณากรอกรหัสรับสัญญาสำหรับงานพัสดุ");
+   if(!key)return;
+ }
  try{
-  const response=await fetch("/api/contracts/"+encodeURIComponent(id)+"/workflow",{method:"PATCH",headers:{"Content-Type":"application/json","X-Contract-Workflow-Key":key},body:JSON.stringify({action})});
+  const headers={"Content-Type":"application/json"};
+  if(action==="receive")headers["X-Contract-Workflow-Key"]=key;
+  const response=await fetch("/api/contracts/"+encodeURIComponent(id)+"/workflow",{method:"PATCH",headers,body:JSON.stringify({action})});
   const result=await response.json();if(!response.ok)throw Error(result.error||"บันทึกไม่สำเร็จ");
   await load();toast("บันทึก"+label+"เรียบร้อยแล้ว");
  }catch(e){alert(e.message);}
