@@ -18,6 +18,14 @@ async function schema(env){
       catch(e) { if (!String(e?.message||e).toLowerCase().includes("duplicate column")) throw e; }
     }
   }
+  // Add workflow timestamps without changing existing contract numbers or document links.
+  for (const name of ["sent_at","received_at"]) {
+    const current=(await env.DB.prepare("PRAGMA table_info(contract_register)").all()).results||[];
+    if (!current.some(c=>c.name===name)) {
+      try { await env.DB.prepare("ALTER TABLE contract_register ADD COLUMN "+name+" TEXT").run(); }
+      catch(e) { if (!String(e?.message||e).toLowerCase().includes("duplicate column")) throw e; }
+    }
+  }
   return (await env.DB.prepare("PRAGMA table_info(contract_register)").all()).results||results;
 }
 function out(r={}){
@@ -35,7 +43,9 @@ function out(r={}){
     fund_source:r.fund_source||"",
     note:r.notes||r.note||"",
     attachment_url:r.attachment_url||"",
-    attachment_name:r.attachment_name||""
+    attachment_name:r.attachment_name||"",
+    sent_at:r.sent_at||"",
+    received_at:r.received_at||""
   };
 }
 function mappedData(b, cols){
@@ -111,7 +121,7 @@ export default {
  async fetch(request,env){
   const u=new URL(request.url), p=u.pathname;
   if(!(p==="/api/contracts"||p.startsWith("/api/contracts/"))) return env.ASSETS.fetch(request);
-  const cors={"Access-Control-Allow-Origin":"https://chatgpt.com","Access-Control-Allow-Headers":"Content-Type, X-Registry-Key, X-Contract-File-Key","Access-Control-Allow-Methods":"GET,POST,PUT,DELETE,OPTIONS"};
+  const cors={"Access-Control-Allow-Origin":"https://chatgpt.com","Access-Control-Allow-Headers":"Content-Type, X-Registry-Key, X-Contract-File-Key, X-Contract-Workflow-Key","Access-Control-Allow-Methods":"GET,POST,PUT,PATCH,DELETE,OPTIONS"};
   if(request.method==="OPTIONS") return new Response(null,{headers:cors});
   if(!env.DB) return Response.json({error:"Database DB is not configured"},{status:503});
   const id=p.split("/")[3]||null;
@@ -148,6 +158,32 @@ export default {
     const item=out(row);
     const master=await syncMaster(env,"upsert",item);
     return Response.json({item,master_sync:master.ok,master_warning:master.ok?null:"บันทึกทะเบียนแล้ว แต่ Master Google Sheet ยังไม่ซิงก์"},{status:201});
+   }
+   // Sending and receiving are separate, write-once actions. Never overwrite dates.
+   if(id && p==="/api/contracts/"+encodeURIComponent(id)+"/workflow" && request.method==="PATCH"){
+     const b=await request.json();
+     const action=b.action;
+     if(action!=="send" && action!=="receive") return Response.json({error:"ขั้นตอนไม่ถูกต้อง"},{status:400});
+     // Staff may mark a contract as sent. Receiving is restricted to the supplies officer.
+     if(action==="receive"){
+       if(!env.CONTRACT_RECEIVE_KEY) return Response.json({error:"ยังไม่ได้ตั้งรหัสสิทธิ์รับสัญญาในระบบ"},{status:503});
+       if(request.headers.get("X-Contract-Workflow-Key")!==env.CONTRACT_RECEIVE_KEY)
+         return Response.json({error:"รหัสรับสัญญาไม่ถูกต้อง"},{status:403});
+     }
+     const existing=await env.DB.prepare("SELECT * FROM contract_register WHERE CAST(id AS TEXT)=? LIMIT 1").bind(id).first();
+     if(!existing) return Response.json({error:"ไม่พบรายการสัญญา"},{status:404});
+     if(Number(existing.fiscal_year)!==2570) return Response.json({error:"รองรับเฉพาะปี 2570"},{status:403});
+     if(action==="send" && existing.sent_at) return Response.json({error:"รายการนี้บันทึกวันที่ส่งสัญญาแล้ว"},{status:409});
+     if(action==="receive" && !existing.sent_at) return Response.json({error:"ต้องส่งสัญญาก่อนจึงจะรับได้"},{status:409});
+     if(action==="receive" && existing.received_at) return Response.json({error:"รายการนี้รับสัญญาแล้ว"},{status:409});
+     const at=new Date().toISOString();
+     const field=action==="send"?"sent_at":"received_at";
+     const condition=action==="send"?"sent_at IS NULL":"sent_at IS NOT NULL AND received_at IS NULL";
+     const result=await env.DB.prepare(`UPDATE contract_register SET ${field}=?,updated_at=? WHERE CAST(id AS TEXT)=? AND ${condition}`)
+       .bind(at,at,id).run();
+     if(!result.meta?.changes) return Response.json({error:"มีการอัปเดตจากเครื่องอื่นแล้ว กรุณารีเฟรช"},{status:409});
+     const row=await env.DB.prepare("SELECT * FROM contract_register WHERE CAST(id AS TEXT)=? LIMIT 1").bind(id).first();
+     return Response.json({item:out(row),ok:true});
    }
    // Update a contract document link without rewriting the other contract fields.
    if(id&&p==="/api/contracts/"+encodeURIComponent(id)+"/attachment"&&request.method==="PATCH"){
