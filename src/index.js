@@ -93,10 +93,10 @@ function mappedData(b, cols){
   }
   return data;
 }
-async function syncMaster(env,action,item){
+async function syncMaster(env,action,item,maxAttempts=3){
   if(!env.MASTER_SYNC_URL||!env.MASTER_SYNC_TOKEN)return {ok:false,skipped:true};
   let lastError="";
-  for(let attempt=1;attempt<=3;attempt++){
+  for(let attempt=1;attempt<=maxAttempts;attempt++){
     const controller=new AbortController();
     const timer=setTimeout(()=>controller.abort(),30000);
     try{
@@ -111,10 +111,91 @@ async function syncMaster(env,action,item){
          receipt.sheet==="สัญญา 70")return {ok:true};
       lastError=response.ok?"Master did not confirm verified contract write":`Master HTTP ${response.status}`;
     }catch(e){clearTimeout(timer);lastError=String(e?.message||e);}
-    if(attempt<3)await new Promise(r=>setTimeout(r,250*attempt));
+    if(attempt<maxAttempts)await new Promise(r=>setTimeout(r,250*attempt));
   }
   console.error("Master sync failed:",lastError);
   return {ok:false,error:lastError};
+}
+
+/* Durable, idempotent retries for failed Cloudflare -> Google Master writes.
+   The D1 queue contains only contract IDs; it always reads the latest contract
+   before retrying, and a revision token prevents an old attempt clearing a
+   newer update. No new contract numbers are allocated by this queue. */
+async function ensureMasterRetryTable(env){
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS contract_master_sync_queue (
+    contract_id TEXT PRIMARY KEY,
+    revision TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_retry_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_error TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+async function syncWithRetryQueue(env,item){
+  let revision="", queueError="";
+  try{
+    await ensureMasterRetryTable(env);
+    revision=crypto.randomUUID();
+    await env.DB.prepare(`INSERT INTO contract_master_sync_queue
+      (contract_id,revision,attempts,next_retry_at,last_error,updated_at)
+      VALUES (?,?,0,datetime('now'),' ',datetime('now'))
+      ON CONFLICT(contract_id) DO UPDATE SET
+      revision=excluded.revision, attempts=0,
+      next_retry_at=datetime('now'),last_error='',updated_at=datetime('now')`)
+      .bind(String(item.id),revision).run();
+  }catch(e){
+    queueError="Unable to save Master retry queue: "+String(e?.message||e);
+    console.error(queueError);
+  }
+  const result=await syncMaster(env,"upsert",item);
+  if(revision){
+    try{
+      if(result.ok){
+        await env.DB.prepare("DELETE FROM contract_master_sync_queue WHERE contract_id=? AND revision=?")
+          .bind(String(item.id),revision).run();
+      }else{
+        await env.DB.prepare(`UPDATE contract_master_sync_queue
+          SET last_error=?,next_retry_at=datetime('now','+15 minutes')
+          WHERE contract_id=? AND revision=?`)
+          .bind(String(result.error||"Master sync not acknowledged").slice(0,1000),String(item.id),revision).run();
+      }
+    }catch(e){
+      queueError="Unable to finalize Master retry queue: "+String(e?.message||e);
+      console.error(queueError);
+    }
+  }
+  if(result.ok)return result;
+  return {...result,queued:Boolean(revision&&!queueError),
+    error:[result.error,queueError].filter(Boolean).join("; ")};
+}
+async function retryMasterQueue(env){
+  if(!env.DB)return;
+  await ensureMasterRetryTable(env);
+  const {results=[]}=await env.DB.prepare(`SELECT contract_id,revision FROM contract_master_sync_queue
+    WHERE next_retry_at<=datetime('now') ORDER BY updated_at ASC LIMIT 4`).all();
+  for(const job of results){
+    try{
+      const row=await env.DB.prepare("SELECT * FROM contract_register WHERE CAST(id AS TEXT)=? LIMIT 1")
+        .bind(job.contract_id).first();
+      if(!row){
+        await env.DB.prepare("DELETE FROM contract_master_sync_queue WHERE contract_id=? AND revision=?")
+          .bind(job.contract_id,job.revision).run();
+        continue;
+      }
+      const result=await syncMaster(env,"upsert",out(row),1);
+      if(result.ok){
+        await env.DB.prepare("DELETE FROM contract_master_sync_queue WHERE contract_id=? AND revision=?")
+          .bind(job.contract_id,job.revision).run();
+      }else{
+        await env.DB.prepare(`UPDATE contract_master_sync_queue SET attempts=attempts+1,
+          last_error=?,next_retry_at=datetime('now','+15 minutes')
+          WHERE contract_id=? AND revision=?`)
+          .bind(String(result.error||"Master sync not acknowledged").slice(0,1000),job.contract_id,job.revision).run();
+      }
+    }catch(e){
+      console.error("Master retry failed for contract ID",job.contract_id,String(e?.message||e));
+    }
+  }
 }
 
 export default {
@@ -156,7 +237,7 @@ export default {
       ? await env.DB.prepare("SELECT * FROM contract_register WHERE id=? LIMIT 1").bind(data.id).first()
       : await env.DB.prepare("SELECT * FROM contract_register ORDER BY rowid DESC LIMIT 1").first();
     const item=out(row);
-    const master=await syncMaster(env,"upsert",item);
+    const master=await syncWithRetryQueue(env,item);
     return Response.json({item,master_sync:master.ok,master_warning:master.ok?null:"บันทึกทะเบียนแล้ว แต่ Master Google Sheet ยังไม่ซิงก์"},{status:201});
    }
    // Sending and receiving are separate, write-once actions. Never overwrite dates.
@@ -199,7 +280,7 @@ export default {
        .bind(link,name,new Date().toISOString(),id).run();
      const row=await env.DB.prepare("SELECT * FROM contract_register WHERE CAST(id AS TEXT)=? LIMIT 1").bind(id).first();
      const item=out(row);
-     const master=await syncMaster(env,"upsert",item);
+     const master=await syncWithRetryQueue(env,item);
      return Response.json({item,master_sync:master.ok,master_warning:master.ok?null:"บันทึกลิงก์ในทะเบียนแล้ว แต่ Master Google Sheet ยังไม่ซิงก์"});
    }
    if(id&&request.method==="PUT"){
@@ -213,7 +294,7 @@ export default {
     await env.DB.prepare(`UPDATE contract_register SET ${keys.map(k=>'"'+k+'"=?').join(",")} WHERE id=?`).bind(...vals,id).run();
     const row=await env.DB.prepare("SELECT * FROM contract_register WHERE id=? LIMIT 1").bind(id).first();
     const item=out(row);
-    const master=await syncMaster(env,"upsert",item);
+    const master=await syncWithRetryQueue(env,item);
     return Response.json({item,master_sync:master.ok,master_warning:master.ok?null:"แก้ไขทะเบียนแล้ว แต่ Master Google Sheet ยังไม่ซิงก์"});
    }
    if(id&&request.method==="DELETE"){
@@ -226,6 +307,11 @@ export default {
       changes=Number(r.meta?.changes||0);
     }
     if(!changes) return Response.json({error:"ไม่พบรายการที่จะลบ"},{status:404});
+    // A removed contract must never be re-sent from the retry queue.
+    try{
+      await ensureMasterRetryTable(env);
+      await env.DB.prepare("DELETE FROM contract_master_sync_queue WHERE contract_id=?").bind(id).run();
+    }catch(e){console.error("Master queue delete cleanup failed:",String(e?.message||e));}
     return Response.json({ok:true,changes});
    }
    return Response.json({error:"Method not allowed"},{status:405});
@@ -233,5 +319,8 @@ export default {
     const s=String(e?.message||e);
     return Response.json({error:s.includes("UNIQUE")?"เลขที่สัญญานี้มีอยู่แล้ว":s},{status:s.includes("UNIQUE")?409:500});
   }
+ },
+ async scheduled(_event,env,ctx){
+   ctx.waitUntil(retryMasterQueue(env));
  }
 };
