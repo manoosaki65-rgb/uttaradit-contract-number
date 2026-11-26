@@ -4,6 +4,9 @@ const num=v=>v===""||v==null?null:Number(v);
 const registryType=v=>v==="hospital"?"hospital":"province";
 const storedNumber=(value,type)=>type==="hospital"&&value&&!value.startsWith("PENDING-")?"HOSPITAL-"+value:value;
 const displayNumber=value=>String(value||"").replace(/^HOSPITAL-/,"");
+const allowedYear=(type,year)=>Number.isInteger(year)&&(type==="hospital"?year>=2562&&year<=2570:year===2570);
+const ready=(env,type,year)=>type!=="hospital"||(year===2570?env.HOSPITAL_REGISTER_READY==="true":env.HOSPITAL_HISTORICAL_READY==="true");
+const validNumber=(value,year)=>new RegExp("^[1-9][0-9]*/"+year+"$").test(String(value||"").trim());
 
 async function schema(env){
   let {results=[]}=await env.DB.prepare("PRAGMA table_info(contract_register)").all();
@@ -110,7 +113,7 @@ function mappedData(b, cols, type="province"){
 async function syncMaster(env,action,item){
   // The existing Master endpoint is verified only for the provincial register.
   // Never write hospital records to that sheet until its separate mapping is configured and tested.
-  if(item.contract_type==="hospital")return {ok:false,skipped:true};
+  if(item.contract_type==="hospital"||Number(item.fiscal_year)!==2570)return {ok:false,skipped:true};
   if(!env.MASTER_SYNC_URL||!env.MASTER_SYNC_TOKEN)return {ok:false,skipped:true};
   let lastError="";
   for(let attempt=1;attempt<=3;attempt++){
@@ -151,6 +154,7 @@ export default {
    if(p==="/api/contracts"&&request.method==="GET"){
     const y=Number(u.searchParams.get("year")||2570);
     const type=registryType(u.searchParams.get("type"));
+    if(!allowedYear(type,y))return Response.json({error:"ปีสัญญาไม่ถูกต้อง"},{status:400});
     const order="CASE WHEN contract_number LIKE 'PENDING-%' OR registration_number LIKE 'PENDING-%' THEN 0 ELSE 1 END ASC, rowid DESC";
     const {results=[]}=await env.DB.prepare(`SELECT rowid AS _rowid, * FROM contract_register WHERE fiscal_year=? AND contract_type=? ORDER BY ${order}`).bind(y,type).all();
     let next=1;
@@ -159,14 +163,18 @@ export default {
       const n=parseInt(s.split("/")[0],10);
       if(Number.isFinite(n)&&n>=next) next=n+1;
     }
-    return Response.json({items:await filesForRows(env,results.map(out)),next,year:y,contract_type:type,hospital_ready:env.HOSPITAL_REGISTER_READY==="true"});
+    return Response.json({items:await filesForRows(env,results.map(out)),next,year:y,contract_type:type,hospital_ready:ready(env,type,y)});
    }
    if(p==="/api/contracts"&&request.method==="POST"){
     const b=await request.json();
     if(!b.subject) return Response.json({error:"กรุณากรอกรายการ"},{status:400});
     if(b.attachment_url&&!/^https:\/\//i.test(String(b.attachment_url).trim()))return Response.json({error:"ลิงก์เอกสารต้องขึ้นต้นด้วย https://"}, {status:400});
     const type=registryType(b.contract_type);
-    if(type==="hospital"&&env.HOSPITAL_REGISTER_READY!=="true")return Response.json({error:"ยังไม่เปิดออกเลขสัญญาโรงพยาบาล: ต้องตรวจและนำเข้าทะเบียนเดิมก่อน"},{status:409});
+    const year=Number(b.fiscal_year||2570);
+    if(!allowedYear(type,year))return Response.json({error:"ปีสัญญาไม่ถูกต้อง"},{status:400});
+    if(!ready(env,type,year))return Response.json({error:"ยังไม่เปิดบันทึกทะเบียนโรงพยาบาลปีนี้: ต้องตรวจทะเบียนเดิมก่อน"},{status:409});
+    if(type==="hospital"&&year<2570&&!validNumber(b.contract_no,year))return Response.json({error:"กรุณาระบุเลขที่สัญญาเดิมให้ตรงปี เช่น 1/"+year},{status:400});
+    if(type==="hospital"&&b.contract_no&&!validNumber(b.contract_no,year))return Response.json({error:"เลขสัญญาไม่ตรงกับปีที่เลือก"},{status:400});
     const data=mappedData(b,cols,type);
     const keys=Object.keys(data).filter(k=>names.has(k));
     if(!keys.length) return Response.json({error:"ไม่พบคอลัมน์ที่รองรับในตาราง contract_register"},{status:500});
@@ -174,7 +182,7 @@ export default {
     await env.DB.prepare(`INSERT INTO contract_register (${keys.map(k=>'"'+k+'"').join(",")}) VALUES (${keys.map(()=>"?").join(",")})`).bind(...vals).run();
     const row=names.has("id")&&data.id
       ? await env.DB.prepare("SELECT * FROM contract_register WHERE id=? LIMIT 1").bind(data.id).first()
-      : await env.DB.prepare("SELECT * FROM contract_register ORDER BY rowid DESC LIMIT 1").first();
+      : await env.DB.prepare("SELECT * FROM contract_register WHERE contract_number=? AND contract_type=? LIMIT 1").bind(data.contract_number,type).first();
     const item=out(row);
     const master=await syncMaster(env,"upsert",item);
     return Response.json({item,master_sync:master.ok,master_warning:master.ok?null:"บันทึกทะเบียนแล้ว แต่ Master Google Sheet ยังไม่ซิงก์"},{status:201});
@@ -192,7 +200,7 @@ export default {
      }
      const existing=await env.DB.prepare("SELECT * FROM contract_register WHERE CAST(id AS TEXT)=? LIMIT 1").bind(id).first();
      if(!existing) return Response.json({error:"ไม่พบรายการสัญญา"},{status:404});
-     if(Number(existing.fiscal_year)!==2570) return Response.json({error:"รองรับเฉพาะปี 2570"},{status:403});
+     if(!allowedYear(registryType(existing.contract_type),Number(existing.fiscal_year))) return Response.json({error:"ปีสัญญาไม่ถูกต้อง"},{status:403});
      if(action==="send" && existing.sent_at) return Response.json({error:"รายการนี้บันทึกวันที่ส่งสัญญาแล้ว"},{status:409});
      if(action==="receive" && !existing.sent_at) return Response.json({error:"ต้องส่งสัญญาก่อนจึงจะรับได้"},{status:409});
      if(action==="receive" && existing.received_at) return Response.json({error:"รายการนี้รับสัญญาแล้ว"},{status:409});
@@ -213,7 +221,7 @@ export default {
    if(id&&p==="/api/contracts/"+encodeURIComponent(id)+"/attachment"&&request.method==="PATCH"){
      const existing=await env.DB.prepare("SELECT * FROM contract_register WHERE CAST(id AS TEXT)=? LIMIT 1").bind(id).first();
      if(!existing)return Response.json({error:"ไม่พบรายการสัญญา"},{status:404});
-     if(Number(existing.fiscal_year)!==2570)return Response.json({error:"รองรับเฉพาะสัญญาปี 2570"},{status:403});
+     if(!allowedYear(registryType(existing.contract_type),Number(existing.fiscal_year)))return Response.json({error:"ปีสัญญาไม่ถูกต้อง"},{status:403});
      const b=await request.json();
      const link=text(b.attachment_url).trim();
      const name=text(b.attachment_name).trim();
@@ -234,7 +242,11 @@ export default {
     if(!existing)return Response.json({error:"ไม่พบรายการสัญญา"},{status:404});
     const type=registryType(existing.contract_type);
     if(b.contract_type&&b.contract_type!==type)return Response.json({error:"ไม่สามารถย้ายประเภทสัญญาด้วยการแก้ไขรายการ"},{status:409});
-    if(type==="hospital"&&env.HOSPITAL_REGISTER_READY!=="true")return Response.json({error:"ยังไม่เปิดแก้ไขทะเบียนโรงพยาบาล"},{status:409});
+    const year=Number(existing.fiscal_year);
+    if(b.fiscal_year!=null&&Number(b.fiscal_year)!==year)return Response.json({error:"ไม่สามารถเปลี่ยนปีของรายการเดิม"},{status:409});
+    if(!allowedYear(type,year)||!ready(env,type,year))return Response.json({error:"ยังไม่เปิดแก้ไขทะเบียนปีนี้"},{status:409});
+    if(type==="hospital"&&(year<2570||b.contract_no)&&!validNumber(b.contract_no,year))return Response.json({error:"เลขสัญญาไม่ตรงกับปีที่เลือก"},{status:400});
+    b.fiscal_year=year;
     const data=mappedData(b,cols,type);
     delete data.id; delete data.created_at; delete data.contract_type;
     const keys=Object.keys(data).filter(k=>names.has(k));
