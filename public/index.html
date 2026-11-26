@@ -18,7 +18,7 @@
 [hidden]{display:none!important}.type-menu{max-width:980px;margin:36px auto;padding:18px}.type-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px}.type-tile{display:block;padding:38px 24px;border-radius:18px;text-decoration:none;color:#174a91;background:#e8f2ff;border:1px solid #93b9e5;box-shadow:0 4px 18px #12345614}.type-tile.hospital{color:#086b50;background:#e5f8ef;border-color:#80cdb1}.type-tile h2{margin:8px 0}.type-tile:focus,.type-tile:hover{outline:2px solid currentColor}.back-menu{display:inline-block;color:white;margin-top:10px}.table th{position:sticky;top:0;z-index:2}.table th:first-child,.table td:first-child{position:sticky;left:0;z-index:1;background:#f3f6fb}.table th:first-child{z-index:3}.handover-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}.handover-tools select{width:auto}.handover-alert{padding:12px;background:#fff4d5;border-radius:10px;margin-bottom:12px}@media print{.top,.handover-tools,#formTitle,#form,.bar input,.actions,.workflow button,td:last-child,th:last-child{display:none!important}.table{overflow:visible}.table table{min-width:0!important;width:100%;font-size:9px}.table th,.table td{position:static!important}.wrap{max-width:none}.panel{box-shadow:none;border:0}}
 </style></head><body><div class="top"><h1 id="pageTitle">ระบบออกเลขที่สัญญา</h1><p>กลุ่มงานพัสดุ โรงพยาบาลอุตรดิตถ์</p><a class="back-menu" id="backMenu" href="/" hidden>← กลับหน้าเลือกประเภทสัญญา</a></div>
 <section id="typeMenu" class="type-menu"><div class="type-grid"><a class="type-tile" href="/?type=province"><span style="font-size:42px">🏛️</span><h2>เลขที่สัญญาจังหวัด</h2><p>ทะเบียนออกเลขสัญญาจังหวัด</p>เข้าสู่ทะเบียน →</a><a class="type-tile hospital" href="/?type=hospital"><span style="font-size:42px">🏥</span><h2>เลขที่สัญญาโรงพยาบาล</h2><p>ทะเบียนออกเลขสัญญา รพ.อต.</p>เข้าสู่ทะเบียน →</a></div></section>
-<div class="wrap" id="registry" hidden><div id="hospitalNotice" class="handover-alert" hidden>ทะเบียนโรงพยาบาลยังไม่เปิดรับรายการใหม่ จนกว่าจะตรวจสอบเลขเดิมและการเชื่อม Master ให้เรียบร้อย</div>
+<div class="wrap" id="registry" hidden><div id="hospitalYearBox" class="panel" hidden><label>ปีสัญญาโรงพยาบาล <select id="hospitalYear"><option value="2570">2570</option><option value="2569">2569</option><option value="2568">2568</option><option value="2567">2567</option><option value="2566">2566</option><option value="2565">2565</option><option value="2564">2564</option><option value="2563">2563</option><option value="2562">2562</option></select></label></div><div id="hospitalNotice" class="handover-alert" hidden>ทะเบียนโรงพยาบาลยังไม่เปิดรับรายการใหม่ จนกว่าจะตรวจสอบเลขเดิมและการเชื่อม Master ให้เรียบร้อย</div>
 <div class="cards"><div class="card"><div class="muted">ปีงบประมาณ</div><div class="big" id="yearCard">2570</div></div><div class="card"><div class="muted">จำนวนรายการ</div><div class="big" id="count">0</div></div></div>
 <div class="panel"><h3 id="formTitle">เพิ่มรายการรอออกเลขสัญญา</h3><form id="form" class="form">
 
@@ -56,12 +56,22 @@
 </section></div><div class="toast" id="toast"></div>
 <script>
 const $=id=>document.getElementById(id);let ALL=[],EDIT=null;
-const TYPE=new URLSearchParams(location.search).get("type");
+const PARAMS=new URLSearchParams(location.search);
+const TYPE=PARAMS.get("type");
+const requestedYear=Number(PARAMS.get("year")||2570);
+const YEAR=TYPE==="hospital"&&Number.isInteger(requestedYear)&&requestedYear>=2562&&requestedYear<=2570?requestedYear:2570;
+const HISTORICAL=TYPE==="hospital"&&YEAR<2570;
+let READY=false;
 const REGISTRY=TYPE==="province"||TYPE==="hospital";
 if(REGISTRY){
  $("typeMenu").hidden=true;$("registry").hidden=false;$("backMenu").hidden=false;
  $("pageTitle").textContent="ทะเบียนออกเลขที่สัญญา"+(TYPE==="hospital"?"โรงพยาบาล":"จังหวัด");
- if(TYPE==="hospital")$("fund_source").value="เงินบริจาค";
+ if(TYPE==="hospital"){
+  $("fund_source").value="เงินบริจาค";$("hospitalYearBox").hidden=false;$("hospitalYear").value=String(YEAR);
+  $("hospitalYear").onchange=()=>{location.href="/?type=hospital&year="+$("hospitalYear").value;};
+ }
+ if(HISTORICAL){$("contractNoField").style.display="block";$("contract_no").required=true;$("contract_no").placeholder="เช่น 1/"+YEAR;$("formTitle").textContent="บันทึกสัญญาโรงพยาบาลย้อนหลัง";}
+ $("save").disabled=true;
 }
 function toast(t){$("toast").textContent=t;$("toast").style.display="block";setTimeout(()=>$("toast").style.display="none",2500)}
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
@@ -228,19 +238,21 @@ async function contractWorkflow(id,action){
  }catch(e){alert(e.message);}
 }
 function render(){let q=$("search").value.trim().toLowerCase();let f=$("workflowFilter").value;let a=ALL.filter(x=>[x.contract_no,x.subject,x.vendor,x.inventory_no,x.buyer,x.duration,x.fund_source,x.sent_by,x.received_by].join(" ").toLowerCase().includes(q)&&(!f||(f==="unsent"&&!x.sent_at)||(f==="waiting"&&x.sent_at&&!x.received_at)||(f==="received"&&x.received_at)));$("waitingCount").textContent=ALL.filter(x=>x.sent_at&&!x.received_at).length;$("rows").innerHTML=a.length?a.map(x=>`<tr><td class="no">${x.contract_no?esc(x.contract_no):"<span class=\"muted\">รอออกเลข</span>"}</td><td>${esc(x.contract_date)}</td><td>${esc(x.duration)}</td><td>${esc(x.subject)}<div class="muted">${esc(x.note)}</div></td><td>${esc(x.vendor)}</td><td class="right">${money(x.amount)}</td><td>${esc(x.inventory_no)}</td><td>${esc(x.buyer)}</td><td>${esc(x.fund_source)}</td><td class="workflow">${workflowCell(x,"send")}</td><td class="workflow">${workflowCell(x,"receive")}</td><td class="documents contract-dropzone" data-contract-id="${esc(x.id)}">${docsHtml(x)}</td><td><button class="btn ghost mini" onclick="editRow('${x.id}')">แก้ไข</button></td></tr>`).join(""):'<tr><td colspan="13" class="muted">ยังไม่มีรายการในปีนี้</td></tr>';$("count").textContent=ALL.length.toLocaleString("th-TH")}
-async function load(){let y=2570;try{let r=await fetch("/api/contracts?year="+y+"&type="+encodeURIComponent(TYPE));let j=await r.json();if(!r.ok)throw Error(j.error||"โหลดทะเบียนไม่สำเร็จ");ALL=j.items||[];$("status").textContent="";$("hospitalNotice").hidden=TYPE!=="hospital"||j.hospital_ready===true;$("save").disabled=TYPE==="hospital"&&j.hospital_ready!==true;$("yearCard").textContent=y;if(!EDIT)$("contract_no").placeholder="รอออกเลข";render()}catch(e){$("status").textContent="กำลังเชื่อมฐานข้อมูล";render()}}
+async function load(){let y=YEAR;try{let r=await fetch("/api/contracts?year="+y+"&type="+encodeURIComponent(TYPE));let j=await r.json();if(!r.ok)throw Error(j.error||"โหลดทะเบียนไม่สำเร็จ");ALL=j.items||[];$("status").textContent="";$("hospitalNotice").hidden=TYPE!=="hospital"||j.hospital_ready===true;READY=TYPE!=="hospital"||j.hospital_ready===true;$("save").disabled=!READY;$("yearCard").textContent=y;if(!EDIT)$("contract_no").placeholder=HISTORICAL?"เช่น 1/"+YEAR:"รอออกเลข";render()}catch(e){$("status").textContent="กำลังเชื่อมฐานข้อมูล";render()}}
 function editRow(id){let x=ALL.find(v=>v.id===id);if(!x)return;EDIT=id;$("contractNoField").style.display="block";["contract_no","contract_date","duration","subject","vendor","inventory_no","buyer","fund_source","note"].forEach(k=>$(k).value=x[k]||"");$("amount").value=x.amount??"";$("attachment_url").value=x.attachment_url||"";$("attachment_name").value=x.attachment_name||"";showCurrentFiles(x);$("formTitle").textContent="แก้ไขรายการ "+(x.contract_no||"รอออกเลข");$("cancel").style.display="inline-block";$("deleteEdit").style.display="inline-block";scrollTo({top:120,behavior:"smooth"})}
-function reset(){EDIT=null;const k=$("file_key").value;$("form").reset();if(TYPE==="hospital")$("fund_source").value="เงินบริจาค";$("file_key").value=k;$("currentFiles").innerHTML="";$("contractNoField").style.display="none";$("formTitle").textContent="เพิ่มรายการรอออกเลขสัญญา";$("cancel").style.display="none";$("deleteEdit").style.display="none"}
+function reset(){EDIT=null;const k=$("file_key").value;$("form").reset();if(TYPE==="hospital")$("fund_source").value="เงินบริจาค";$("file_key").value=k;$("currentFiles").innerHTML="";$("contractNoField").style.display=HISTORICAL?"block":"none";$("formTitle").textContent=HISTORICAL?"บันทึกสัญญาโรงพยาบาลย้อนหลัง":"เพิ่มรายการรอออกเลขสัญญา";$("cancel").style.display="none";$("deleteEdit").style.display="none"}
 async function delRow(id){let x=ALL.find(v=>v.id===id);if(!confirm("ลบรายการ "+(x?.contract_no||"")+" ใช่หรือไม่?"))return;let r=await fetch("/api/contracts/"+id,{method:"DELETE"});if(r.ok){toast("ลบแล้ว");reset();load()}else toast("ลบไม่สำเร็จ")}
 $("form").onsubmit=async e=>{
  e.preventDefault();
+ if(!READY){alert("ทะเบียนยังไม่พร้อมบันทึก");return;}
+ if(HISTORICAL&&!new RegExp("^[1-9][0-9]*/"+YEAR+"$").test($("contract_no").value.trim())){alert("กรุณากรอกเลขที่สัญญาเดิมให้ตรงปี "+YEAR);return;}
  const selected=Array.from($("attachment_files").files||[]);
  if(selected.length&&!UPLOAD_ENABLED){alert("ระบบยังไม่เปิดพื้นที่เก็บไฟล์จากเครื่อง กรุณาใช้ลิงก์ Google Drive ก่อน");return;}
  const key=$("file_key").value.trim();
  if(selected.length&&!key){alert("กรุณากรอกรหัสสำหรับแนบไฟล์");return;}
  if(selected.some(f=>f.size>15*1024*1024)){alert("ขนาดไฟล์แต่ละไฟล์ต้องไม่เกิน 15 MB");return;}
  const b={
-   fiscal_year:2570,contract_type:TYPE,contract_no:EDIT?$("contract_no").value:"",
+   fiscal_year:YEAR,contract_type:TYPE,contract_no:EDIT||HISTORICAL?$("contract_no").value.trim():"",
    contract_date:$("contract_date").value,duration:$("duration").value,
    subject:$("subject").value,vendor:$("vendor").value,amount:$("amount").value,
    inventory_no:$("inventory_no").value,buyer:$("buyer").value,
@@ -269,7 +281,7 @@ $("form").onsubmit=async e=>{
      editRow(savedId);
      alert("บันทึกทะเบียนสัญญาแล้ว แต่ไฟล์บางรายการยังแนบไม่สำเร็จ:\n"+failed.join("\n")+"\nกรุณาเลือกไฟล์แนบใหม่อีกครั้งในหน้าแก้ไข");
    }else{reset();if(j.master_warning)alert(j.master_warning);else toast(selected.length?"บันทึกและแนบไฟล์เรียบร้อย":"บันทึกทะเบียนแล้ว");}
- }catch(err){alert(err.message)}finally{$("save").disabled=false;}
+ }catch(err){alert(err.message)}finally{$("save").disabled=!READY;}
 };
 $("cancel").onclick=reset;$("deleteEdit").onclick=()=>{if(EDIT)delRow(EDIT)};$("search").oninput=render;$("workflowFilter").onchange=render;$("printRows").onclick=()=>print();if(REGISTRY){load();checkUpload();}
 </script></body></html>
