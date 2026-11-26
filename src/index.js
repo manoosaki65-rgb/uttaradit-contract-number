@@ -1,6 +1,9 @@
 import {ensureAttachmentSchema, filesForRows, handleAttachmentRequest} from "./attachments.js";
 const text=v=>String(v??"");
 const num=v=>v===""||v==null?null:Number(v);
+const registryType=v=>v==="hospital"?"hospital":"province";
+const storedNumber=(value,type)=>type==="hospital"&&value&&!value.startsWith("PENDING-")?"HOSPITAL-"+value:value;
+const displayNumber=value=>String(value||"").replace(/^HOSPITAL-/,"");
 
 async function schema(env){
   let {results=[]}=await env.DB.prepare("PRAGMA table_info(contract_register)").all();
@@ -26,12 +29,20 @@ async function schema(env){
       catch(e) { if (!String(e?.message||e).toLowerCase().includes("duplicate column")) throw e; }
     }
   }
+  for(const [name,definition] of [["contract_type","TEXT NOT NULL DEFAULT 'province'"],["sent_by","TEXT"],["received_by","TEXT"]]){
+    const current=(await env.DB.prepare("PRAGMA table_info(contract_register)").all()).results||[];
+    if(!current.some(c=>c.name===name)){
+      try{await env.DB.prepare("ALTER TABLE contract_register ADD COLUMN "+name+" "+definition).run();}
+      catch(e){if(!String(e?.message||e).toLowerCase().includes("duplicate column"))throw e;}
+    }
+  }
   return (await env.DB.prepare("PRAGMA table_info(contract_register)").all()).results||results;
 }
 function out(r={}){
   return {
     id:String(r.id??r._rowid??r.rowid??""),
-    contract_no:(()=>{const v=r.contract_number||r.registration_number||"";return String(v).startsWith("PENDING-")?"":v;})(),
+    contract_no:(()=>{const v=r.contract_number||r.registration_number||"";return String(v).startsWith("PENDING-")?"":displayNumber(v);})(),
+    contract_type:registryType(r.contract_type),
     fiscal_year:r.fiscal_year,
     contract_date:r.contract_date||r.registered_date||"",
     duration:r.contract_duration||r.duration||"",
@@ -45,16 +56,19 @@ function out(r={}){
     attachment_url:r.attachment_url||"",
     attachment_name:r.attachment_name||"",
     sent_at:r.sent_at||"",
-    received_at:r.received_at||""
+    received_at:r.received_at||"",
+    sent_by:r.sent_by||"",
+    received_by:r.received_by||""
   };
 }
-function mappedData(b, cols){
+function mappedData(b, cols, type="province"){
   const now=new Date().toISOString();
   const rawNo=text(b.contract_no).trim();
-  const no=rawNo || `PENDING-${crypto.randomUUID()}`;
+  const no=storedNumber(rawNo,type) || `PENDING-${crypto.randomUUID()}`;
   const y=Number(b.fiscal_year||2570);
   const today=now.slice(0,10);
   const data={
+    contract_type:type,
     registration_number:no,
     contract_number:no,
     fiscal_year:y,
@@ -94,6 +108,9 @@ function mappedData(b, cols){
   return data;
 }
 async function syncMaster(env,action,item){
+  // The existing Master endpoint is verified only for the provincial register.
+  // Never write hospital records to that sheet until its separate mapping is configured and tested.
+  if(item.contract_type==="hospital")return {ok:false,skipped:true};
   if(!env.MASTER_SYNC_URL||!env.MASTER_SYNC_TOKEN)return {ok:false,skipped:true};
   let lastError="";
   for(let attempt=1;attempt<=3;attempt++){
@@ -133,21 +150,24 @@ export default {
    const names=new Set(cols.map(c=>c.name));
    if(p==="/api/contracts"&&request.method==="GET"){
     const y=Number(u.searchParams.get("year")||2570);
+    const type=registryType(u.searchParams.get("type"));
     const order="CASE WHEN contract_number LIKE 'PENDING-%' OR registration_number LIKE 'PENDING-%' THEN 0 ELSE 1 END ASC, rowid DESC";
-    const {results=[]}=await env.DB.prepare(`SELECT rowid AS _rowid, * FROM contract_register WHERE fiscal_year=? ORDER BY ${order}`).bind(y).all();
+    const {results=[]}=await env.DB.prepare(`SELECT rowid AS _rowid, * FROM contract_register WHERE fiscal_year=? AND contract_type=? ORDER BY ${order}`).bind(y,type).all();
     let next=1;
     for(const r of results){
-      const s=text(r.contract_number||r.registration_number||"");
+      const s=displayNumber(r.contract_number||r.registration_number||"");
       const n=parseInt(s.split("/")[0],10);
       if(Number.isFinite(n)&&n>=next) next=n+1;
     }
-    return Response.json({items:await filesForRows(env,results.map(out)),next,year:y});
+    return Response.json({items:await filesForRows(env,results.map(out)),next,year:y,contract_type:type,hospital_ready:env.HOSPITAL_REGISTER_READY==="true"});
    }
    if(p==="/api/contracts"&&request.method==="POST"){
     const b=await request.json();
     if(!b.subject) return Response.json({error:"กรุณากรอกรายการ"},{status:400});
     if(b.attachment_url&&!/^https:\/\//i.test(String(b.attachment_url).trim()))return Response.json({error:"ลิงก์เอกสารต้องขึ้นต้นด้วย https://"}, {status:400});
-    const data=mappedData(b,cols);
+    const type=registryType(b.contract_type);
+    if(type==="hospital"&&env.HOSPITAL_REGISTER_READY!=="true")return Response.json({error:"ยังไม่เปิดออกเลขสัญญาโรงพยาบาล: ต้องตรวจและนำเข้าทะเบียนเดิมก่อน"},{status:409});
+    const data=mappedData(b,cols,type);
     const keys=Object.keys(data).filter(k=>names.has(k));
     if(!keys.length) return Response.json({error:"ไม่พบคอลัมน์ที่รองรับในตาราง contract_register"},{status:500});
     const vals=keys.map(k=>data[k]);
@@ -176,11 +196,15 @@ export default {
      if(action==="send" && existing.sent_at) return Response.json({error:"รายการนี้บันทึกวันที่ส่งสัญญาแล้ว"},{status:409});
      if(action==="receive" && !existing.sent_at) return Response.json({error:"ต้องส่งสัญญาก่อนจึงจะรับได้"},{status:409});
      if(action==="receive" && existing.received_at) return Response.json({error:"รายการนี้รับสัญญาแล้ว"},{status:409});
+     const actor=text(b.actor).trim();
+     if(!actor||actor.length>120)return Response.json({error:"กรุณาระบุชื่อผู้ดำเนินการ"},{status:400});
+     if(!out(existing).contract_no)return Response.json({error:"กรุณาออกเลขสัญญาก่อนส่งแฟ้ม"},{status:409});
      const at=new Date().toISOString();
      const field=action==="send"?"sent_at":"received_at";
-     const condition=action==="send"?"sent_at IS NULL":"sent_at IS NOT NULL AND received_at IS NULL";
-     const result=await env.DB.prepare(`UPDATE contract_register SET ${field}=?,updated_at=? WHERE CAST(id AS TEXT)=? AND ${condition}`)
-       .bind(at,at,id).run();
+     const actorField=action==="send"?"sent_by":"received_by";
+     const condition=action==="send"?"(sent_at IS NULL OR sent_at=\u0027\u0027)":"sent_at IS NOT NULL AND sent_at<>\u0027\u0027 AND (received_at IS NULL OR received_at=\u0027\u0027)";
+     const result=await env.DB.prepare(`UPDATE contract_register SET ${field}=?,${actorField}=?,updated_at=? WHERE CAST(id AS TEXT)=? AND ${condition}`)
+       .bind(at,actor,at,id).run();
      if(!result.meta?.changes) return Response.json({error:"มีการอัปเดตจากเครื่องอื่นแล้ว กรุณารีเฟรช"},{status:409});
      const row=await env.DB.prepare("SELECT * FROM contract_register WHERE CAST(id AS TEXT)=? LIMIT 1").bind(id).first();
      return Response.json({item:out(row),ok:true});
@@ -206,8 +230,13 @@ export default {
     const b=await request.json();
     if(!b.subject) return Response.json({error:"กรุณากรอกรายการ"},{status:400});
     if(b.attachment_url&&!/^https:\/\//i.test(String(b.attachment_url).trim()))return Response.json({error:"ลิงก์เอกสารต้องขึ้นต้นด้วย https://"}, {status:400});
-    const data=mappedData(b,cols);
-    delete data.id; delete data.created_at;
+    const existing=await env.DB.prepare("SELECT * FROM contract_register WHERE CAST(id AS TEXT)=? LIMIT 1").bind(id).first();
+    if(!existing)return Response.json({error:"ไม่พบรายการสัญญา"},{status:404});
+    const type=registryType(existing.contract_type);
+    if(b.contract_type&&b.contract_type!==type)return Response.json({error:"ไม่สามารถย้ายประเภทสัญญาด้วยการแก้ไขรายการ"},{status:409});
+    if(type==="hospital"&&env.HOSPITAL_REGISTER_READY!=="true")return Response.json({error:"ยังไม่เปิดแก้ไขทะเบียนโรงพยาบาล"},{status:409});
+    const data=mappedData(b,cols,type);
+    delete data.id; delete data.created_at; delete data.contract_type;
     const keys=Object.keys(data).filter(k=>names.has(k));
     const vals=keys.map(k=>data[k]);
     await env.DB.prepare(`UPDATE contract_register SET ${keys.map(k=>'"'+k+'"=?').join(",")} WHERE id=?`).bind(...vals,id).run();
