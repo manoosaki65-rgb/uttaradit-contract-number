@@ -24,7 +24,8 @@ export async function filesForRows(env, rows) {
   return rows.map(r => ({...r, files: grouped.get(String(r.id)) || []}));
 }
 
-export async function handleAttachmentRequest(request, env, path) {
+export async function handleAttachmentRequest(request, env, path, register="contract_register") {
+  if(!["contract_register","hospital_contract_register"].includes(register))throw Error("Invalid register");
   if (path === "/api/contracts/attachment-status" && request.method === "GET") {
     return Response.json({upload_enabled: Boolean(env.CONTRACT_FILES && env.CONTRACT_FILE_KEY), max_mb: 15, link_enabled: true});
   }
@@ -38,7 +39,7 @@ export async function handleAttachmentRequest(request, env, path) {
     return error("รหัสเข้าถึงไฟล์ไม่ถูกต้อง", 403);
 
   if (request.method === "POST" && !fileId) {
-    const contract = await env.DB.prepare("SELECT id FROM contract_register WHERE CAST(id AS TEXT)=? LIMIT 1").bind(contractId).first();
+    const contract = await env.DB.prepare("SELECT id FROM "+register+" WHERE CAST(id AS TEXT)=? LIMIT 1").bind(contractId).first();
     if (!contract) return error("ไม่พบรายการสัญญา", 404);
     const form = await request.formData();
     const file = form.get("file");

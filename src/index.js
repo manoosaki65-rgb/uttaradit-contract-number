@@ -1,3 +1,4 @@
+import {handleHospital} from "./hospital.js";
 import {ensureAttachmentSchema, filesForRows, handleAttachmentRequest} from "./attachments.js";
 const text=v=>String(v??"");
 const num=v=>v===""||v==null?null:Number(v);
@@ -120,6 +121,7 @@ async function syncMaster(env,action,item){
 export default {
  async fetch(request,env){
   const u=new URL(request.url), p=u.pathname;
+  if(p==="/api/hospital-contracts"||p.startsWith("/api/hospital-contracts/")) return handleHospital(request,env,p);
   if(!(p==="/api/contracts"||p.startsWith("/api/contracts/"))) return env.ASSETS.fetch(request);
   const cors={"Access-Control-Allow-Origin":"https://chatgpt.com","Access-Control-Allow-Headers":"Content-Type, X-Registry-Key, X-Contract-File-Key, X-Contract-Workflow-Key","Access-Control-Allow-Methods":"GET,POST,PUT,PATCH,DELETE,OPTIONS"};
   if(request.method==="OPTIONS") return new Response(null,{headers:cors});

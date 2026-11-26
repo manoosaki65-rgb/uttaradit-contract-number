@@ -16,10 +16,10 @@
 .quick-panel button:disabled{opacity:.55;cursor:not-allowed}
 .workflow{min-width:112px;text-align:center}.workflow .btn{white-space:nowrap;padding:7px 10px}.workflow-date{font-size:12px;color:#15703f;font-weight:bold}.workflow-send{background:#1769cf;color:white}.workflow-receive{background:#175cb7;color:white}.workflow-done{background:#e6f8e5;border:1px solid #b9e4b5;border-radius:8px;padding:6px}.workflow-wait{color:#98a2b3}.table table{min-width:1420px}th,td{padding:8px 6px}.workflow-header-send{background:#fff3c4}.workflow-header-receive{background:#dce8ff}
 </style></head><body><div class="top"><h1>ทะเบียนออกเลขที่สัญญาโรงพยาบาล</h1><p>กลุ่มงานพัสดุ โรงพยาบาลอุตรดิตถ์</p><p><a href="/" style="color:white">← กลับหน้าเลือกประเภทสัญญา</a></p></div><div class="wrap">
-<div class="panel" style="border-color:#b7d4c4;background:#f2fbf5"><b>หน้าเตรียมทะเบียน รพ.อต.</b><p>แสดงข้อมูลที่นำมาจาก Master ณ 26 พ.ย. 2569 (สำเนาชั่วคราว) ยังไม่เปิดบันทึกข้อมูลหรือออกเลขจริง</p><label>ปีสัญญา <select id="yearSelect"><option value="2570">2570</option><option value="2569">2569</option><option value="2568">2568</option><option value="2567">2567</option><option value="2566">2566</option><option value="2565">2565</option><option value="2564">2564</option><option value="2563">2563</option><option value="2562">2562</option></select></label></div><div class="cards"><div class="card"><div class="muted">ปีงบประมาณ</div><div class="big" id="yearCard">2570</div></div><div class="card"><div class="muted">จำนวนรายการ</div><div class="big" id="count">—</div></div></div>
+<div class="panel"><label>ปีสัญญา <select id="hospitalYear"><option value="2570">2570</option><option value="2569">2569</option><option value="2568">2568</option><option value="2567">2567</option><option value="2566">2566</option><option value="2565">2565</option><option value="2564">2564</option><option value="2563">2563</option><option value="2562">2562</option></select></label><p class="muted">บันทึกเข้าฐานข้อมูล D1 แยกทะเบียนจังหวัด • ยังไม่ซิงก์ Master อัตโนมัติ</p></div><div class="cards"><div class="card"><div class="muted">ปีงบประมาณ</div><div class="big" id="yearCard">2570</div></div><div class="card"><div class="muted">จำนวนรายการ</div><div class="big" id="count">0</div></div></div>
 <div class="panel"><h3 id="formTitle">เพิ่มรายการสัญญาโรงพยาบาล</h3><form id="form" class="form">
 
-<label id="contractNoField">เลขที่สัญญา<input id="contract_no" placeholder="เช่น 1/2570"></label>
+<label id="contractNoField">เลขที่สัญญา<input id="contract_no" required placeholder="เช่น 1/2570"></label>
 <label>ลงวันที่<input id="contract_date" type="date"></label>
 <label>ระยะเวลา<input id="duration" placeholder="เช่น 120 วัน / 1 ปี"></label>
 <label>เลข Inventory<input id="inventory_no" placeholder="เช่น 69-05132"></label>
@@ -33,25 +33,232 @@
 <label class="wide">ชื่อเอกสาร / ชื่อไฟล์<input id="attachment_name" placeholder="เช่น 2570 - 100 สัญญาจัดซื้อวัสดุ.pdf"></label>
 <div class="file-zone"><label for="attachment_files">แนบไฟล์สัญญาจากเครื่อง (PDF / Word)</label>
 <input type="file" id="attachment_files" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple disabled>
-<p id="uploadStatus">ยังไม่ได้เชื่อมพื้นที่จัดเก็บไฟล์แนบ</p>
+<p id="uploadStatus">กำลังตรวจสอบพื้นที่จัดเก็บไฟล์แนบ…</p>
 <label id="fileKeyLabel" style="display:none">รหัสสำหรับแนบและเปิดไฟล์สัญญา<input type="password" id="file_key" autocomplete="off" placeholder="รหัสที่ตั้งไว้ใน Cloudflare"></label>
 <div id="currentFiles" class="documents"></div></div>
-<div class="actions wide"><button class="btn primary" id="save" disabled title="รอเชื่อมฐานข้อมูล">บันทึก (รอเชื่อมข้อมูล)</button><button type="button" class="btn ghost" id="cancel" style="display:none">ยกเลิกแก้ไข</button><button type="button" class="btn danger" id="deleteEdit" style="display:none">ลบรายการ</button></div>
+<div class="actions wide"><button class="btn primary" id="save">บันทึก</button><button type="button" class="btn ghost" id="cancel" style="display:none">ยกเลิกแก้ไข</button><button type="button" class="btn danger" id="deleteEdit" style="display:none">ลบรายการ</button></div>
 </form></div>
-<div class="panel"><div class="bar"><div><b>รายการออกเลขสัญญา</b> <span class="muted" id="status"></span></div><input id="search" placeholder="ค้นหาเลขสัญญา / เรื่อง / ผู้ค้า / Inventory / ระยะเวลา / แหล่งเงิน"></div><div class="table"><table><thead><tr><th>เลขที่สัญญา</th><th>ลงวันที่</th><th>ระยะเวลา</th><th>รายการ</th><th>ผู้ค้า</th><th class="right">วงเงิน</th><th>Inventory</th><th>ผู้ซื้อ</th><th>แหล่งเงิน</th><th class="workflow-header-send">ส่งแฟ้ม (จัดซื้อ)</th><th class="workflow-header-receive">รับแฟ้ม (พัสดุ)</th><th>เอกสารสัญญา</th><th>จัดการ</th></tr></thead><tbody id="rows"><tr><td colspan="13" class="muted">กำลังแสดงรายการจาก Master</td></tr></tbody></table></div></div></div><script>
-const records=[{"no":"1/2570","year":"2570","fund":"เงินบริจาค","buyer":"สุรชาติ","subject":"จ้างก่อสร้างปรับปรุงหอผู้ป่วยพิเศษศัลยกรรมกระดูกและข้อ และหอผู้ป่วยพิเศษ Sleep Test จำนวน 1 งาน","vendor":"ห้างหุ้นส่วนจำกัด หิรัญย์ทรัพย์ไพศาล","amount":"2090000","date":"12/10/2569","status":"ออกเลขแล้ว","inventory":"","duration":"13 ต.ค. 69 – 10 ม.ค. 70"}];
-const $=id=>document.getElementById(id),year=$("yearSelect"),no=$("contract_no");
-function render(){
- const all=records.filter(r=>r.year===year.value),q=$("search").value.trim().toLowerCase();
- const visible=all.filter(r=>Object.values(r).join(" ").toLowerCase().includes(q));
- $("count").textContent=all.length.toLocaleString("th-TH");$("status").textContent="สำเนาจาก Master • อ่านอย่างเดียว";
- $("rows").replaceChildren();
- if(!visible.length){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=13;td.className="muted";td.textContent=q?"ไม่พบรายการที่ค้นหา":"ยังไม่มีรายการที่นำมาจาก Master สำหรับปีนี้";tr.append(td);$("rows").append(tr);return;}
- for(const r of visible){
- const tr=document.createElement("tr"), vals=[r.no,r.date,r.duration,r.subject,r.vendor,r.amount?Number(r.amount).toLocaleString("th-TH",{minimumFractionDigits:2,maximumFractionDigits:2}):"",r.inventory,r.buyer,r.fund,"ยังไม่ยืนยัน","ยังไม่ยืนยัน","รอแนบไฟล์",r.status];
- vals.forEach((v,i)=>{const td=document.createElement("td");td.textContent=v;if(i===0)td.className="no";if(i===5)td.className="right";tr.append(td);});$("rows").append(tr);
+<div class="panel"><div class="bar"><div><b>รายการออกเลขสัญญา</b> <span class="muted" id="status"></span></div><input id="search" placeholder="ค้นหาเลขสัญญา / เรื่อง / ผู้ค้า / Inventory / ระยะเวลา / แหล่งเงิน"></div><div class="table"><table><thead><tr><th>เลขที่สัญญา</th><th>ลงวันที่</th><th>ระยะเวลา</th><th>รายการ</th><th>ผู้ค้า</th><th class="right">วงเงิน</th><th>Inventory</th><th>ผู้ซื้อ</th><th>แหล่งเงิน</th><th class="workflow-header-send">ส่งแฟ้ม (จัดซื้อ)</th><th class="workflow-header-receive">รับแฟ้ม (พัสดุ)</th><th>เอกสารสัญญา</th><th>จัดการ</th></tr></thead><tbody id="rows"></tbody></table></div></div></div><div id="quickDialog" class="quick-shade" hidden><section class="quick-panel" role="dialog" aria-modal="true" aria-labelledby="quickTitle">
+<h3 id="quickTitle">แนบเอกสารสัญญา</h3><p class="msg" id="quickSubject"></p>
+<div class="actions"><button id="quickPick" type="button" class="btn primary">📎 เลือก PDF / Word จากเครื่อง</button><input type="file" id="quickFiles" accept=".pdf,.doc,.docx" multiple hidden></div>
+<p id="quickHint" class="msg"></p>
+<label id="quickKeyLabel">รหัสแนบไฟล์<input type="password" id="quickKey" autocomplete="off" placeholder="รหัสไฟล์ Cloudflare"></label>
+<button id="quickRetry" type="button" class="btn ghost mini" hidden>อัปโหลดไฟล์ที่เลือก</button>
+<hr style="border:0;border-top:1px solid #e4e7ec;margin:18px 0">
+<b>หรือแนบลิงก์ Google Drive</b>
+<label>ลิงก์เอกสาร<input id="quickLink" type="url" placeholder="https://drive.google.com/file/d/..."></label>
+<label>ชื่อเอกสาร<input id="quickName" placeholder="เช่น 2570 - 195 สัญญา.pdf"></label>
+<div class="actions"><button type="button" class="btn primary" id="quickSave">บันทึกลิงก์</button><button type="button" class="btn ghost" id="quickClose">ปิด</button></div>
+<p id="quickStatus" class="msg" role="status"></p>
+</section></div><div class="toast" id="toast"></div>
+<script>
+const $=id=>document.getElementById(id);let ALL=[],EDIT=null,READY=false;const YEAR=$("hospitalYear");const initialYear=new URLSearchParams(location.search).get("year");if([...YEAR.options].some(o=>o.value===initialYear))YEAR.value=initialYear;YEAR.onchange=()=>location.href="/hospital?year="+YEAR.value;$("save").disabled=true;
+function toast(t){$("toast").textContent=t;$("toast").style.display="block";setTimeout(()=>$("toast").style.display="none",2500)}
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+function money(v){return v==null?"":Number(v).toLocaleString("th-TH",{minimumFractionDigits:2,maximumFractionDigits:2})}
+let UPLOAD_ENABLED=false;
+function docsHtml(x){
+ const docs=[];
+ if(x.attachment_url && /^https:\/\//i.test(x.attachment_url)){
+   docs.push('<a class="doc-link" target="_blank" rel="noopener noreferrer" href="'+esc(x.attachment_url)+'">📄 '+esc(x.attachment_name||"เปิดเอกสาร Drive")+'</a>');
  }
+ for(const f of x.files||[]){
+   docs.push('<button class="btn ghost mini" type="button" onclick="openContractFile(\''+esc(x.id)+'\',\''+esc(f.id)+'\')">📎 '+esc(f.file_name)+'</button>');
+ }
+ const btn='<button type="button" class="attach-btn" onclick="quickAttach(\''+esc(x.id)+'\')">📎 '+(docs.length?'เพิ่มเอกสาร':'แนบเอกสาร')+'</button>';
+ return docs.join("")+btn+(UPLOAD_ENABLED?'<small class="drop-hint">ลาก PDF/Word มาวางได้</small>':'');
 }
-function setYear(){$("yearCard").textContent=year.value;no.placeholder="เช่น 1/"+year.value;render();}
-year.onchange=setYear;$("search").oninput=render;$("form").onsubmit=e=>e.preventDefault();setYear();
+
+let QUICK_ID=null,QUICK_BUSY=false,PENDING_FILES=[];
+function quickMessage(m){$("quickStatus").textContent=m||"";}
+function quickAttach(id){
+ const x=ALL.find(a=>String(a.id)===String(id));if(!x)return;
+ QUICK_ID=String(id);$("quickDialog").hidden=false;
+ $("quickSubject").textContent=(x.contract_no||"รอออกเลข")+" — "+(x.subject||"");
+ $("quickLink").value=x.attachment_url||"";$("quickName").value=x.attachment_name||"";
+ $("quickKey").value=$("file_key").value||"";$("quickFiles").value="";PENDING_FILES=[];$("quickRetry").hidden=true;
+ $("quickPick").disabled=!UPLOAD_ENABLED;$("quickKeyLabel").hidden=!UPLOAD_ENABLED;
+ $("quickHint").textContent=UPLOAD_ENABLED?"เลือกไฟล์ PDF/Word ได้หลายไฟล์ ไม่เกิน 15 MB ต่อไฟล์":"พื้นที่เก็บไฟล์จากเครื่อง (R2) ยังไม่เปิดใช้งาน ใช้ลิงก์ Google Drive ด้านล่างได้ก่อน";
+ quickMessage("");if(!UPLOAD_ENABLED)$("quickLink").focus();
+}
+function closeQuick(){if(QUICK_BUSY)return;$("quickDialog").hidden=true;QUICK_ID=null;$("quickFiles").value="";PENDING_FILES=[];}
+async function quickUpload(filesOverride){
+ if(QUICK_BUSY||!QUICK_ID||!UPLOAD_ENABLED)return;
+ const files=Array.isArray(filesOverride)?filesOverride:(PENDING_FILES.length?PENDING_FILES:Array.from($("quickFiles").files||[]));
+ PENDING_FILES=files;
+ if(!files.length){quickMessage("กรุณาเลือกไฟล์");return;}
+ if(files.some(f=>f.size<1||f.size>15*1024*1024||!/\.(pdf|doc|docx)$/i.test(f.name))){quickMessage("รองรับ PDF/Word ขนาดไม่เกิน 15 MB ต่อไฟล์");return;}
+ const key=$("quickKey").value.trim();
+ if(!key){quickMessage("กรุณากรอกรหัสแนบไฟล์ แล้วกดอัปโหลดไฟล์ที่เลือก");$("quickRetry").hidden=false;$("quickKey").focus();return;}
+ $("file_key").value=key;QUICK_BUSY=true;$("quickPick").disabled=true;$("quickRetry").disabled=true;
+ let count=0;const failed=[];
+ for(const f of files){
+  quickMessage("กำลังแนบ "+f.name);
+  try{const body=new FormData();body.append("file",f,f.name);
+   const r=await fetch("/api/hospital-contracts/"+encodeURIComponent(QUICK_ID)+"/files",{method:"POST",headers:{"X-Contract-File-Key":key},body});
+   const j=await r.json();if(!r.ok)throw Error(j.error||"อัปโหลดไม่ได้");count++;
+  }catch(e){failed.push(f.name+": "+e.message);}
+ }
+ QUICK_BUSY=false;$("quickPick").disabled=!UPLOAD_ENABLED;$("quickRetry").disabled=false;
+ await load();
+ if(failed.length){quickMessage("แนบสำเร็จ "+count+" ไฟล์; แนบไม่สำเร็จ:\n"+failed.join("\n"));$("quickRetry").hidden=true;}
+ else{closeQuick();toast("แนบเอกสารแล้ว "+count+" ไฟล์");}
+}
+async function quickSaveLink(){
+ if(!QUICK_ID||QUICK_BUSY)return;
+ const url=$("quickLink").value.trim();
+ if(!/^https:\/\//i.test(url)){quickMessage("กรุณาใส่ลิงก์เอกสาร HTTPS");return;}
+ QUICK_BUSY=true;$("quickSave").disabled=true;quickMessage("กำลังบันทึกลิงก์...");
+ try{
+  const r=await fetch("/api/hospital-contracts/"+encodeURIComponent(QUICK_ID)+"/attachment",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({attachment_url:url,attachment_name:$("quickName").value.trim()})});
+  const j=await r.json();if(!r.ok)throw Error(j.error||"บันทึกไม่สำเร็จ");
+  await load();QUICK_BUSY=false;closeQuick();
+  if(j.master_warning)alert("บันทึกในทะเบียนแล้ว แต่ "+j.master_warning);
+  else toast("แนบลิงก์เอกสารแล้ว");
+ }catch(e){QUICK_BUSY=false;quickMessage(e.message);}
+ finally{$("quickSave").disabled=false;}
+}
+$("quickPick").onclick=()=>{if(UPLOAD_ENABLED)$("quickFiles").click()};
+$("quickFiles").onchange=()=>{if($("quickFiles").files.length)quickUpload(Array.from($("quickFiles").files))};
+$("quickRetry").onclick=()=>quickUpload();$("quickSave").onclick=quickSaveLink;$("quickClose").onclick=closeQuick;
+$("quickDialog").onclick=e=>{if(e.target===$("quickDialog"))closeQuick()};
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("quickDialog").hidden)closeQuick()});
+
+let ACTIVE_DROP=null;
+function contractDropCell(el){return el&&el.closest?el.closest("td.contract-dropzone[data-contract-id]"):null;}
+function clearContractDrop(){if(ACTIVE_DROP){ACTIVE_DROP.classList.remove("file-over");ACTIVE_DROP=null;}}
+$("rows").addEventListener("dragover",e=>{
+ if(!e.dataTransfer||!Array.from(e.dataTransfer.types||[]).includes("Files"))return;
+ const cell=contractDropCell(e.target);if(!cell)return;
+ e.preventDefault();e.dataTransfer.dropEffect="copy";
+ if(ACTIVE_DROP!==cell){clearContractDrop();ACTIVE_DROP=cell;cell.classList.add("file-over");}
+});
+$("rows").addEventListener("dragleave",e=>{
+ if(ACTIVE_DROP&&!ACTIVE_DROP.contains(e.relatedTarget))clearContractDrop();
+});
+$("rows").addEventListener("drop",e=>{
+ const cell=contractDropCell(e.target);
+ if(!cell||!e.dataTransfer)return;
+ e.preventDefault();e.stopPropagation();clearContractDrop();
+ const files=Array.from(e.dataTransfer.files||[]);
+ if(!files.length)return;
+ quickAttach(cell.dataset.contractId);
+ if(!UPLOAD_ENABLED){
+  quickMessage("ไฟล์ที่ลากมายังไม่ได้บันทึก: พื้นที่เก็บไฟล์ Cloudflare R2 ยังไม่เปิดใช้งาน กรุณาเปิดระบบรับไฟล์ก่อน หรืออัปโหลดไฟล์ไป Google Drive แล้ววางลิงก์แทน");
+  return;
+ }
+ PENDING_FILES=files;
+ quickUpload(files);
+});
+document.addEventListener("dragover",e=>{if(e.dataTransfer&&Array.from(e.dataTransfer.types||[]).includes("Files"))e.preventDefault()});
+document.addEventListener("drop",e=>{if(e.dataTransfer&&Array.from(e.dataTransfer.types||[]).includes("Files")&&!contractDropCell(e.target))e.preventDefault()});
+async function checkUpload(){
+ try{
+   const r=await fetch("/api/hospital-contracts/attachment-status");
+   const j=await r.json();
+   UPLOAD_ENABLED=Boolean(j.upload_enabled);
+   $("attachment_files").disabled=!UPLOAD_ENABLED;
+   $("fileKeyLabel").style.display=UPLOAD_ENABLED?"block":"none";
+   $("uploadStatus").textContent=UPLOAD_ENABLED?
+     "เลือกได้หลายไฟล์ ไฟล์ละไม่เกิน 15 MB; ต้องกรอกรหัสแนบไฟล์":
+     "ยังไม่เปิดพื้นที่จัดเก็บไฟล์จากเครื่อง: ใช้ลิงก์ Google Drive ด้านบนได้ก่อน";
+   render();
+ }catch(e){$("uploadStatus").textContent="ตรวจสอบพื้นที่เก็บไฟล์ไม่สำเร็จ ใช้ลิงก์ Google Drive ได้";}
+}
+async function openContractFile(id,fileId){
+ const key=$("file_key").value.trim();
+ if(!key){alert("กรุณากรอกรหัสสำหรับเปิดไฟล์ในช่องแนบไฟล์ด้านบน");return;}
+ const popup=window.open("","_blank");
+ try{
+   const r=await fetch("/api/hospital-contracts/"+encodeURIComponent(id)+"/files/"+encodeURIComponent(fileId),{headers:{"X-Contract-File-Key":key}});
+   if(!r.ok){const j=await r.json();throw Error(j.error||"เปิดไฟล์ไม่สำเร็จ");}
+   const blob=await r.blob();const url=URL.createObjectURL(blob);
+   if(popup){popup.location.href=url;}else{const a=document.createElement("a");a.href=url;a.download="contract-document";a.click();}
+   setTimeout(()=>URL.revokeObjectURL(url),120000);
+ }catch(e){if(popup)popup.close();alert(e.message);}
+}
+async function removeContractFile(id,fileId){
+ if(!confirm("ลบไฟล์สัญญาที่แนบในรายการนี้ใช่หรือไม่?"))return;
+ const key=$("file_key").value.trim();if(!key){alert("กรุณากรอกรหัสไฟล์");return;}
+ try{
+   const r=await fetch("/api/hospital-contracts/"+encodeURIComponent(id)+"/files/"+encodeURIComponent(fileId),{method:"DELETE",headers:{"X-Contract-File-Key":key}});
+   const j=await r.json();if(!r.ok)throw Error(j.error||"ลบไฟล์ไม่สำเร็จ");
+   await load();editRow(id);toast("ลบไฟล์แนบแล้ว");
+ }catch(e){alert(e.message);}
+}
+function showCurrentFiles(x){
+ $("currentFiles").innerHTML=(x.files||[]).map(f=>
+ '<div>📎 '+esc(f.file_name)+' <button type="button" class="btn danger mini" onclick="removeContractFile(\''+esc(x.id)+'\',\''+esc(f.id)+'\')">ลบไฟล์</button></div>'
+ ).join("");
+}
+function workflowDate(value){if(!value)return "";const d=new Date(value);return Number.isNaN(d.getTime())?"":new Intl.DateTimeFormat("th-TH",{timeZone:"Asia/Bangkok",day:"numeric",month:"short",year:"numeric"}).format(d);}
+function workflowCell(x,action){
+ const stamp=action==="send"?x.sent_at:x.received_at;
+ if(stamp)return '<div class="workflow-done">✓ '+(action==="send"?"ส่งแล้ว":"รับแล้ว")+'<div class="workflow-date">'+esc(workflowDate(stamp))+'</div><div>'+esc(action==='send'?x.sent_by:x.received_by)+'</div></div>';
+ if(action==="receive"&&!x.sent_at)return '<span class="workflow-wait">—</span>';
+ return '<button class="btn '+(action==="send"?"workflow-send":"workflow-receive")+'" type="button" onclick="contractWorkflow(&quot;'+esc(String(x.id))+'&quot;,&quot;'+action+'&quot;)">'+(action==="send"?"➤ ส่งแฟ้ม":"✓ รับแฟ้ม")+'</button>';
+}
+async function contractWorkflow(id,action){
+ const x=ALL.find(y=>String(y.id)===String(id));if(!x)return;
+ const label=action==="send"?"ส่งสัญญา (จัดซื้อ)":"รับสัญญา (พัสดุ)";
+ if(!confirm("ยืนยัน"+label+" เลขที่ "+(x.contract_no||"รอออกเลข")+"? ระบบจะบันทึกวันและเวลาจริงและไม่ให้กดซ้ำ"))return;
+ const actor=prompt("ระบุชื่อผู้"+(action==="send"?"ส่งแฟ้ม":"รับแฟ้ม"),action==="send"?(x.buyer||""):"");if(!actor||!actor.trim())return;
+ let key="";
+ if(action==="receive"){
+   key=prompt("กรุณากรอกรหัสรับสัญญาสำหรับงานพัสดุ");
+   if(!key)return;
+ }
+ try{
+  const headers={"Content-Type":"application/json"};
+  if(action==="receive")headers["X-Contract-Workflow-Key"]=key;
+  const response=await fetch("/api/hospital-contracts/"+encodeURIComponent(id)+"/workflow",{method:"PATCH",headers,body:JSON.stringify({action,actor:actor.trim()})});
+  const result=await response.json();if(!response.ok)throw Error(result.error||"บันทึกไม่สำเร็จ");
+  await load();toast("บันทึก"+label+"เรียบร้อยแล้ว");
+ }catch(e){alert(e.message);}
+}
+function render(){let q=$("search").value.trim().toLowerCase();let a=ALL.filter(x=>[x.contract_no,x.subject,x.vendor,x.inventory_no,x.buyer,x.duration,x.fund_source].join(" ").toLowerCase().includes(q));$("rows").innerHTML=a.length?a.map(x=>`<tr><td class="no">${x.contract_no?esc(x.contract_no):"<span class=\"muted\">รอออกเลข</span>"}</td><td>${esc(x.contract_date)}</td><td>${esc(x.duration)}</td><td>${esc(x.subject)}<div class="muted">${esc(x.note)}</div></td><td>${esc(x.vendor)}</td><td class="right">${money(x.amount)}</td><td>${esc(x.inventory_no)}</td><td>${esc(x.buyer)}</td><td>${esc(x.fund_source)}</td><td class="workflow">${workflowCell(x,"send")}</td><td class="workflow">${workflowCell(x,"receive")}</td><td class="documents contract-dropzone" data-contract-id="${esc(x.id)}">${docsHtml(x)}</td><td><button class="btn ghost mini" onclick="editRow('${x.id}')">แก้ไข</button></td></tr>`).join(""):'<tr><td colspan="13" class="muted">ยังไม่มีรายการในปีนี้</td></tr>';$("count").textContent=ALL.length.toLocaleString("th-TH")}
+async function load(){let y=Number(YEAR.value);try{let r=await fetch("/api/hospital-contracts?year="+y,{cache:"no-store"});let j=await r.json();if(!r.ok)throw Error(j.error||"โหลดไม่สำเร็จ");ALL=j.items||[];$("yearCard").textContent=y;$("status").textContent="เชื่อมฐานข้อมูลแล้ว";READY=true;$("save").disabled=false;if(!EDIT)$("contract_no").placeholder="เลขถัดไป "+j.next+"/"+y;render()}catch(e){READY=false;$("save").disabled=true;$("status").textContent=e.message;}}
+function editRow(id){let x=ALL.find(v=>v.id===id);if(!x)return;EDIT=id;$("contractNoField").style.display="block";["contract_no","contract_date","duration","subject","vendor","inventory_no","buyer","fund_source","note"].forEach(k=>$(k).value=x[k]||"");$("amount").value=x.amount??"";$("attachment_url").value=x.attachment_url||"";$("attachment_name").value=x.attachment_name||"";showCurrentFiles(x);$("formTitle").textContent="แก้ไขรายการ "+(x.contract_no||"รอออกเลข");$("cancel").style.display="inline-block";$("deleteEdit").style.display="none";$("contract_no").readOnly=true;scrollTo({top:120,behavior:"smooth"})}
+function reset(){EDIT=null;const k=$("file_key").value;$("form").reset();$("file_key").value=k;$("currentFiles").innerHTML="";$("contractNoField").style.display="block";$("contract_no").readOnly=false;$("fund_source").value="เงินบริจาค";$("formTitle").textContent="เพิ่มรายการสัญญาโรงพยาบาล";$("cancel").style.display="none";$("deleteEdit").style.display="none"}
+async function delRow(id){let x=ALL.find(v=>v.id===id);if(!confirm("ลบรายการ "+(x?.contract_no||"")+" ใช่หรือไม่?"))return;let r=await fetch("/api/hospital-contracts/"+id,{method:"DELETE"});if(r.ok){toast("ลบแล้ว");reset();load()}else toast("ลบไม่สำเร็จ")}
+$("form").onsubmit=async e=>{
+ e.preventDefault();if(!READY)return;
+ const selected=Array.from($("attachment_files").files||[]);
+ if(selected.length&&!UPLOAD_ENABLED){alert("ระบบยังไม่เปิดพื้นที่เก็บไฟล์จากเครื่อง กรุณาใช้ลิงก์ Google Drive ก่อน");return;}
+ const key=$("file_key").value.trim();
+ if(selected.length&&!key){alert("กรุณากรอกรหัสสำหรับแนบไฟล์");return;}
+ if(selected.some(f=>f.size>15*1024*1024)){alert("ขนาดไฟล์แต่ละไฟล์ต้องไม่เกิน 15 MB");return;}
+ const b={
+   fiscal_year:Number(YEAR.value),contract_no:$("contract_no").value.trim(),
+   contract_date:$("contract_date").value,duration:$("duration").value,
+   subject:$("subject").value,vendor:$("vendor").value,amount:$("amount").value,
+   inventory_no:$("inventory_no").value,buyer:$("buyer").value,
+   fund_source:$("fund_source").value,note:$("note").value,
+   attachment_url:$("attachment_url").value.trim(),attachment_name:$("attachment_name").value.trim()
+ };
+ $("save").disabled=true;
+ try{
+   const r=await fetch(EDIT?"/api/hospital-contracts/"+encodeURIComponent(EDIT):"/api/hospital-contracts",{
+     method:EDIT?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)
+   });
+   const j=await r.json();if(!r.ok)throw Error(j.error||"บันทึกไม่สำเร็จ");
+   const savedId=String(j.item.id);
+   const failed=[];
+   for(const file of selected){
+     try{
+       const data=new FormData();data.append("file",file,file.name);
+       const ur=await fetch("/api/hospital-contracts/"+encodeURIComponent(savedId)+"/files",{
+         method:"POST",headers:{"X-Contract-File-Key":key},body:data
+       });
+       const uj=await ur.json();if(!ur.ok)throw Error(uj.error||"อัปโหลดไม่สำเร็จ");
+     }catch(err){failed.push(file.name+": "+err.message);}
+   }
+   await load();
+   if(failed.length){
+     editRow(savedId);
+     alert("บันทึกทะเบียนสัญญาแล้ว แต่ไฟล์บางรายการยังแนบไม่สำเร็จ:\n"+failed.join("\n")+"\nกรุณาเลือกไฟล์แนบใหม่อีกครั้งในหน้าแก้ไข");
+   }else{reset();toast(selected.length?"บันทึกและแนบไฟล์เรียบร้อย":"บันทึกทะเบียนแล้ว");}
+ }catch(err){alert(err.message)}finally{$("save").disabled=!READY;}
+};
+$("cancel").onclick=reset;$("deleteEdit").onclick=()=>{if(EDIT)delRow(EDIT)};$("search").oninput=render;load();checkUpload();
 </script></body></html>
