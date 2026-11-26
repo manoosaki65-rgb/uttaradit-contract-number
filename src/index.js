@@ -1,3 +1,4 @@
+import {workflowFields,ensureWorkflowColumns,workflowOutput} from "./workflow.js";
 import {handleHospital} from "./hospital.js";
 import {ensureAttachmentSchema, filesForRows, handleAttachmentRequest} from "./attachments.js";
 const text=v=>String(v??"");
@@ -27,6 +28,7 @@ async function schema(env){
       catch(e) { if (!String(e?.message||e).toLowerCase().includes("duplicate column")) throw e; }
     }
   }
+  await ensureWorkflowColumns(env,"contract_register");
   return (await env.DB.prepare("PRAGMA table_info(contract_register)").all()).results||results;
 }
 function out(r={}){
@@ -46,7 +48,8 @@ function out(r={}){
     attachment_url:r.attachment_url||"",
     attachment_name:r.attachment_name||"",
     sent_at:r.sent_at||"",
-    received_at:r.received_at||""
+    received_at:r.received_at||"",
+    ...workflowOutput(r,false)
   };
 }
 function mappedData(b, cols){
@@ -164,7 +167,8 @@ export default {
    // Sending and receiving are separate, write-once actions. Never overwrite dates.
    if(id && p==="/api/contracts/"+encodeURIComponent(id)+"/workflow" && request.method==="PATCH"){
      const b=await request.json();
-     const action=b.action;
+     const action=b.action,stage=Number(b.stage??1),actor=text(b.actor).trim();
+     if(![1,2].includes(stage)||actor.length>120||(b.stage!=null&&!actor))return Response.json({error:"กรุณาระบุขั้นตอนและชื่อผู้ดำเนินการ"},{status:400});
      if(action!=="send" && action!=="receive") return Response.json({error:"ขั้นตอนไม่ถูกต้อง"},{status:400});
      // Staff may mark a contract as sent. Receiving is restricted to the supplies officer.
      if(action==="receive"){
@@ -175,14 +179,10 @@ export default {
      const existing=await env.DB.prepare("SELECT * FROM contract_register WHERE CAST(id AS TEXT)=? LIMIT 1").bind(id).first();
      if(!existing) return Response.json({error:"ไม่พบรายการสัญญา"},{status:404});
      if(Number(existing.fiscal_year)!==2570) return Response.json({error:"รองรับเฉพาะปี 2570"},{status:403});
-     if(action==="send" && existing.sent_at) return Response.json({error:"รายการนี้บันทึกวันที่ส่งสัญญาแล้ว"},{status:409});
-     if(action==="receive" && !existing.sent_at) return Response.json({error:"ต้องส่งสัญญาก่อนจึงจะรับได้"},{status:409});
-     if(action==="receive" && existing.received_at) return Response.json({error:"รายการนี้รับสัญญาแล้ว"},{status:409});
-     const at=new Date().toISOString();
-     const field=action==="send"?"sent_at":"received_at";
-     const condition=action==="send"?"sent_at IS NULL":"sent_at IS NOT NULL AND received_at IS NULL";
-     const result=await env.DB.prepare(`UPDATE contract_register SET ${field}=?,updated_at=? WHERE CAST(id AS TEXT)=? AND ${condition}`)
-       .bind(at,at,id).run();
+     const f=workflowFields(stage,false),at=new Date().toISOString();
+     const field=action==="send"?f.sent:f.received,person=action==="send"?f.sender:f.receiver;
+     const condition=action==="send"?"("+f.sent+" IS NULL OR "+f.sent+"='')":"("+f.sent+" IS NOT NULL AND "+f.sent+"<>'') AND ("+f.received+" IS NULL OR "+f.received+"='')";
+     const result=await env.DB.prepare("UPDATE contract_register SET "+field+"=?,"+person+"=?,updated_at=? WHERE CAST(id AS TEXT)=? AND "+condition).bind(at,actor||null,at,id).run();
      if(!result.meta?.changes) return Response.json({error:"มีการอัปเดตจากเครื่องอื่นแล้ว กรุณารีเฟรช"},{status:409});
      const row=await env.DB.prepare("SELECT * FROM contract_register WHERE CAST(id AS TEXT)=? LIMIT 1").bind(id).first();
      return Response.json({item:out(row),ok:true});

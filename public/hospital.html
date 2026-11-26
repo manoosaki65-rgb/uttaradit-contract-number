@@ -15,7 +15,7 @@
 .quick-panel .msg{color:#475467;font-size:13px;white-space:pre-wrap;line-height:1.5}
 .quick-panel button:disabled{opacity:.55;cursor:not-allowed}
 .workflow{min-width:112px;text-align:center}.workflow .btn{white-space:nowrap;padding:7px 10px}.workflow-date{font-size:12px;color:#15703f;font-weight:bold}.workflow-send{background:#1769cf;color:white}.workflow-receive{background:#175cb7;color:white}.workflow-done{background:#e6f8e5;border:1px solid #b9e4b5;border-radius:8px;padding:6px}.workflow-wait{color:#98a2b3}.table table{min-width:1420px}th,td{padding:8px 6px}.workflow-header-send{background:#fff3c4}.workflow-header-receive{background:#dce8ff}
-</style></head><body><div class="top"><h1>ทะเบียนออกเลขที่สัญญาโรงพยาบาล</h1><p>กลุ่มงานพัสดุ โรงพยาบาลอุตรดิตถ์</p><p><a href="/" style="color:white">← กลับหน้าเลือกประเภทสัญญา</a></p></div><div class="wrap">
+.group-one,.group-two{text-align:center;white-space:nowrap;font-weight:700}.group-one{background:#e4efff}.group-two{background:#fff0d3}.workflow-subhead th{position:static;text-align:center}.workflow-receive{background:#d9f3e6;color:#086b50}.workflow-send{background:#e4efff;color:#174a91}.table table{min-width:1740px}.workflow .btn:disabled{opacity:.45;cursor:not-allowed}</style></head><body><div class="top"><h1>ทะเบียนออกเลขที่สัญญาโรงพยาบาล</h1><p>กลุ่มงานพัสดุ โรงพยาบาลอุตรดิตถ์</p><p><a href="/" style="color:white">← กลับหน้าเลือกประเภทสัญญา</a></p></div><div class="wrap">
 <div class="panel"><label>ปีสัญญา <select id="hospitalYear"><option value="2570">2570</option><option value="2569">2569</option><option value="2568">2568</option><option value="2567">2567</option><option value="2566">2566</option><option value="2565">2565</option><option value="2564">2564</option><option value="2563">2563</option><option value="2562">2562</option></select></label><p class="muted">บันทึกเข้าฐานข้อมูล D1 แยกทะเบียนจังหวัด • ยังไม่ซิงก์ Master อัตโนมัติ</p></div><div class="cards"><div class="card"><div class="muted">ปีงบประมาณ</div><div class="big" id="yearCard">2570</div></div><div class="card"><div class="muted">จำนวนรายการ</div><div class="big" id="count">0</div></div></div>
 <div class="panel"><h3 id="formTitle">เพิ่มรายการสัญญาโรงพยาบาล</h3><form id="form" class="form">
 
@@ -38,7 +38,7 @@
 <div id="currentFiles" class="documents"></div></div>
 <div class="actions wide"><button class="btn primary" id="save">บันทึก</button><button type="button" class="btn ghost" id="cancel" style="display:none">ยกเลิกแก้ไข</button><button type="button" class="btn danger" id="deleteEdit" style="display:none">ลบรายการ</button></div>
 </form></div>
-<div class="panel"><div class="bar"><div><b>รายการออกเลขสัญญา</b> <span class="muted" id="status"></span></div><input id="search" placeholder="ค้นหาเลขสัญญา / เรื่อง / ผู้ค้า / Inventory / ระยะเวลา / แหล่งเงิน"></div><div class="table"><table><thead><tr><th>เลขที่สัญญา</th><th>ลงวันที่</th><th>ระยะเวลา</th><th>รายการ</th><th>ผู้ค้า</th><th class="right">วงเงิน</th><th>Inventory</th><th>ผู้ซื้อ</th><th>แหล่งเงิน</th><th class="workflow-header-send">ส่งแฟ้ม (จัดซื้อ)</th><th class="workflow-header-receive">รับแฟ้ม (พัสดุ)</th><th>เอกสารสัญญา</th><th>จัดการ</th></tr></thead><tbody id="rows"></tbody></table></div></div></div><div id="quickDialog" class="quick-shade" hidden><section class="quick-panel" role="dialog" aria-modal="true" aria-labelledby="quickTitle">
+<div class="panel"><div class="bar"><div><b>รายการออกเลขสัญญา</b> <span class="muted" id="status"></span></div><input id="search" placeholder="ค้นหาเลขสัญญา / เรื่อง / ผู้ค้า / Inventory / ระยะเวลา / แหล่งเงิน"></div><div class="table"><table><thead><tr><th rowspan="2">เลขที่สัญญา</th><th rowspan="2">ลงวันที่</th><th rowspan="2">ระยะเวลา</th><th rowspan="2">รายการ</th><th rowspan="2">ผู้ค้า</th><th rowspan="2" class="right">วงเงิน</th><th rowspan="2">Inventory</th><th rowspan="2">ผู้ซื้อ</th><th rowspan="2">แหล่งเงิน</th><th colspan="2" class="group-one">1. สัญญา (หนังสือค้ำ)</th><th colspan="2" class="group-two">2. แฟ้มสัญญา (ตรวจรับ)</th><th rowspan="2">เอกสารสัญญา</th><th rowspan="2">จัดการ</th></tr><tr class="workflow-subhead"><th class="workflow-header-send">จัดซื้อ</th><th class="workflow-header-receive">พัสดุ</th><th class="workflow-header-send">จัดซื้อ</th><th class="workflow-header-receive">พัสดุ</th></tr></thead><tbody id="rows"></tbody></table></div></div></div><div id="quickDialog" class="quick-shade" hidden><section class="quick-panel" role="dialog" aria-modal="true" aria-labelledby="quickTitle">
 <h3 id="quickTitle">แนบเอกสารสัญญา</h3><p class="msg" id="quickSubject"></p>
 <div class="actions"><button id="quickPick" type="button" class="btn primary">📎 เลือก PDF / Word จากเครื่อง</button><input type="file" id="quickFiles" accept=".pdf,.doc,.docx" multiple hidden></div>
 <p id="quickHint" class="msg"></p>
@@ -192,31 +192,23 @@ function showCurrentFiles(x){
  ).join("");
 }
 function workflowDate(value){if(!value)return "";const d=new Date(value);return Number.isNaN(d.getTime())?"":new Intl.DateTimeFormat("th-TH",{timeZone:"Asia/Bangkok",day:"numeric",month:"short",year:"numeric"}).format(d);}
-function workflowCell(x,action){
- const stamp=action==="send"?x.sent_at:x.received_at;
- if(stamp)return '<div class="workflow-done">✓ '+(action==="send"?"ส่งแล้ว":"รับแล้ว")+'<div class="workflow-date">'+esc(workflowDate(stamp))+'</div><div>'+esc(action==='send'?x.sent_by:x.received_by)+'</div></div>';
- if(action==="receive"&&!x.sent_at)return '<span class="workflow-wait">—</span>';
- return '<button class="btn '+(action==="send"?"workflow-send":"workflow-receive")+'" type="button" onclick="contractWorkflow(&quot;'+esc(String(x.id))+'&quot;,&quot;'+action+'&quot;)">'+(action==="send"?"➤ ส่งแฟ้ม":"✓ รับแฟ้ม")+'</button>';
+function workflowCell(x,action,stage){
+ const pre="stage"+stage+"_",stamp=x[pre+(action==="send"?"sent_at":"received_at")],actor=x[pre+(action==="send"?"sent_by":"received_by")];
+ const label=stage===1?(action==="send"?"ส่งสัญญา":"รับสัญญา"):(action==="send"?"ส่งแฟ้ม":"รับแฟ้ม");
+ if(stamp)return '<div class="workflow-done">✓ '+label+'แล้ว<div class="workflow-date">'+esc(workflowDate(stamp))+'</div><div>'+esc(actor||"")+'</div></div>';
+ const disabled=action==="receive"&&!x[pre+"sent_at"];
+ return '<button class="btn '+(action==="send"?"workflow-send":"workflow-receive")+'" type="button" '+(disabled?'disabled title="กรุณาส่งก่อนรับ"':'')+' onclick="contractWorkflow(&quot;'+esc(String(x.id))+'&quot;,&quot;'+action+'&quot;,'+stage+')">'+label+'</button>';
 }
-async function contractWorkflow(id,action){
- const x=ALL.find(y=>String(y.id)===String(id));if(!x)return;
- const label=action==="send"?"ส่งสัญญา (จัดซื้อ)":"รับสัญญา (พัสดุ)";
- if(!confirm("ยืนยัน"+label+" เลขที่ "+(x.contract_no||"รอออกเลข")+"? ระบบจะบันทึกวันและเวลาจริงและไม่ให้กดซ้ำ"))return;
- const actor=prompt("ระบุชื่อผู้"+(action==="send"?"ส่งแฟ้ม":"รับแฟ้ม"),action==="send"?(x.buyer||""):"");if(!actor||!actor.trim())return;
- let key="";
- if(action==="receive"){
-   key=prompt("กรุณากรอกรหัสรับสัญญาสำหรับงานพัสดุ");
-   if(!key)return;
- }
- try{
-  const headers={"Content-Type":"application/json"};
-  if(action==="receive")headers["X-Contract-Workflow-Key"]=key;
-  const response=await fetch("/api/hospital-contracts/"+encodeURIComponent(id)+"/workflow",{method:"PATCH",headers,body:JSON.stringify({action,actor:actor.trim()})});
-  const result=await response.json();if(!response.ok)throw Error(result.error||"บันทึกไม่สำเร็จ");
-  await load();toast("บันทึก"+label+"เรียบร้อยแล้ว");
- }catch(e){alert(e.message);}
+async function contractWorkflow(id,action,stage){
+ const x=ALL.find(v=>String(v.id)===String(id));if(!x)return;
+ const label=stage===1?(action==="send"?"ส่งสัญญา":"รับสัญญา"):(action==="send"?"ส่งแฟ้ม":"รับแฟ้ม");
+ if(!confirm("ยืนยัน "+label+" เลขที่ "+(x.contract_no||"รอออกเลข")+"?"))return;
+ const actor=prompt("ระบุชื่อผู้ดำเนินการ",action==="send"?(x.buyer||""):"");if(!actor||!actor.trim())return;
+ const headers={"Content-Type":"application/json"};
+ if(action==="receive"){const key=prompt("กรุณากรอกรหัสรับแฟ้ม");if(!key)return;headers["X-Contract-Workflow-Key"]=key;}
+ try{const r=await fetch("/api/hospital-contracts/"+encodeURIComponent(id)+"/workflow",{method:"PATCH",headers,body:JSON.stringify({action,stage,actor:actor.trim()})});const j=await r.json();if(!r.ok)throw Error(j.error||"บันทึกไม่สำเร็จ");await load();toast("บันทึกแล้ว");}catch(e){alert(e.message);}
 }
-function render(){let q=$("search").value.trim().toLowerCase();let a=ALL.filter(x=>[x.contract_no,x.subject,x.vendor,x.inventory_no,x.buyer,x.duration,x.fund_source].join(" ").toLowerCase().includes(q));$("rows").innerHTML=a.length?a.map(x=>`<tr><td class="no">${x.contract_no?esc(x.contract_no):"<span class=\"muted\">รอออกเลข</span>"}</td><td>${esc(x.contract_date)}</td><td>${esc(x.duration)}</td><td>${esc(x.subject)}<div class="muted">${esc(x.note)}</div></td><td>${esc(x.vendor)}</td><td class="right">${money(x.amount)}</td><td>${esc(x.inventory_no)}</td><td>${esc(x.buyer)}</td><td>${esc(x.fund_source)}</td><td class="workflow">${workflowCell(x,"send")}</td><td class="workflow">${workflowCell(x,"receive")}</td><td class="documents contract-dropzone" data-contract-id="${esc(x.id)}">${docsHtml(x)}</td><td><button class="btn ghost mini" onclick="editRow('${x.id}')">แก้ไข</button></td></tr>`).join(""):'<tr><td colspan="13" class="muted">ยังไม่มีรายการในปีนี้</td></tr>';$("count").textContent=ALL.length.toLocaleString("th-TH")}
+function render(){let q=$("search").value.trim().toLowerCase();let a=ALL.filter(x=>[x.contract_no,x.subject,x.vendor,x.inventory_no,x.buyer,x.duration,x.fund_source].join(" ").toLowerCase().includes(q));$("rows").innerHTML=a.length?a.map(x=>`<tr><td class="no">${x.contract_no?esc(x.contract_no):"<span class=\"muted\">รอออกเลข</span>"}</td><td>${esc(x.contract_date)}</td><td>${esc(x.duration)}</td><td>${esc(x.subject)}<div class="muted">${esc(x.note)}</div></td><td>${esc(x.vendor)}</td><td class="right">${money(x.amount)}</td><td>${esc(x.inventory_no)}</td><td>${esc(x.buyer)}</td><td>${esc(x.fund_source)}</td><td class="workflow">${workflowCell(x,"send",1)}</td><td class="workflow">${workflowCell(x,"receive",1)}</td><td class="workflow">${workflowCell(x,"send",2)}</td><td class="workflow">${workflowCell(x,"receive",2)}</td><td class="documents contract-dropzone" data-contract-id="${esc(x.id)}">${docsHtml(x)}</td><td><button class="btn ghost mini" onclick="editRow('${x.id}')">แก้ไข</button></td></tr>`).join(""):'<tr><td colspan="15" class="muted">ยังไม่มีรายการในปีนี้</td></tr>';$("count").textContent=ALL.length.toLocaleString("th-TH")}
 async function load(){let y=Number(YEAR.value);try{let r=await fetch("/api/hospital-contracts?year="+y,{cache:"no-store"});let j=await r.json();if(!r.ok)throw Error(j.error||"โหลดไม่สำเร็จ");ALL=j.items||[];$("yearCard").textContent=y;$("status").textContent="เชื่อมฐานข้อมูลแล้ว";READY=true;$("save").disabled=false;if(!EDIT)$("contract_no").placeholder="เลขถัดไป "+j.next+"/"+y;render()}catch(e){READY=false;$("save").disabled=true;$("status").textContent=e.message;}}
 function editRow(id){let x=ALL.find(v=>v.id===id);if(!x)return;EDIT=id;$("contractNoField").style.display="block";["contract_no","contract_date","duration","subject","vendor","inventory_no","buyer","fund_source","note"].forEach(k=>$(k).value=x[k]||"");$("amount").value=x.amount??"";$("attachment_url").value=x.attachment_url||"";$("attachment_name").value=x.attachment_name||"";showCurrentFiles(x);$("formTitle").textContent="แก้ไขรายการ "+(x.contract_no||"รอออกเลข");$("cancel").style.display="inline-block";$("deleteEdit").style.display="none";$("contract_no").readOnly=true;scrollTo({top:120,behavior:"smooth"})}
 function reset(){EDIT=null;const k=$("file_key").value;$("form").reset();$("file_key").value=k;$("currentFiles").innerHTML="";$("contractNoField").style.display="block";$("contract_no").readOnly=false;$("fund_source").value="เงินบริจาค";$("formTitle").textContent="เพิ่มรายการสัญญาโรงพยาบาล";$("cancel").style.display="none";$("deleteEdit").style.display="none"}

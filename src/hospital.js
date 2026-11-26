@@ -1,3 +1,4 @@
+import {workflowFields,ensureWorkflowColumns,workflowOutput} from "./workflow.js";
 import {ensureAttachmentSchema, filesForRows, handleAttachmentRequest} from "./attachments.js";
 const error=(message,status=400)=>Response.json({error:message},{status});
 const clean=v=>String(v??"").trim();
@@ -9,6 +10,7 @@ async function schema(env){
  await env.DB.batch([
  env.DB.prepare("INSERT OR IGNORE INTO hospital_contract_register (id,contract_no,fiscal_year,contract_date,duration,subject,vendor,amount,inventory_no,buyer,fund_source,created_at,updated_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM hospital_registry_migrations WHERE name='master-2570-001')").bind("hospital-master-2570-001",seed.no,Number(seed.year),"2026-10-12",seed.duration,seed.subject,seed.vendor,Number(seed.amount),seed.inventory,seed.buyer,seed.fund,new Date().toISOString(),new Date().toISOString()),
  env.DB.prepare("INSERT OR IGNORE INTO hospital_registry_migrations(name) VALUES('master-2570-001')")]);
+ await ensureWorkflowColumns(env,"hospital_contract_register");
  await ensureAttachmentSchema(env);
 }
 const yearOK=y=>Number.isInteger(y)&&y>=2562&&y<=2570;
@@ -30,7 +32,7 @@ export async function handleHospital(request,env,path){
  if(path===base&&method==="GET"){
   const y=Number(u.searchParams.get("year")||2570);if(!yearOK(y))return error("ปีไม่ถูกต้อง");
   const {results=[]}=await env.DB.prepare("SELECT * FROM hospital_contract_register WHERE fiscal_year=? ORDER BY created_at DESC,id DESC").bind(y).all();
-  return Response.json({items:await filesForRows(env,results),year:y,next:Math.max(0,...results.map(r=>Number(r.contract_no.split("/")[0])||0))+1,master_sync:false});
+  return Response.json({items:await filesForRows(env,results.map(r=>({...r,...workflowOutput(r,true)}))),year:y,next:Math.max(0,...results.map(r=>Number(r.contract_no.split("/")[0])||0))+1,master_sync:false});
  }
  if(path===base&&method==="POST"){
   const b=await request.json();let vals;try{vals=data(b)}catch(e){return error(e.message);}
@@ -45,14 +47,14 @@ export async function handleHospital(request,env,path){
  if(!r)return error("ไม่พบสัญญา",404);
  if(sub==="files")return handleAttachmentRequest(request,env,path.replace(base,"/api/contracts"),"hospital_contract_register");
  if(sub==="workflow"&&method==="PATCH"){
-  const b=await request.json(),action=b.action,actor=clean(b.actor);
-  if(!["send","receive"].includes(action)||!actor||actor.length>120)return error("กรุณาระบุชื่อผู้ดำเนินการ");
+  const b=await request.json(),action=b.action,actor=clean(b.actor),stage=Number(b.stage??2);
+  if(![1,2].includes(stage)||!["send","receive"].includes(action)||!actor||actor.length>120)return error("กรุณาระบุชื่อผู้ดำเนินการ");
   if(action==="receive"){
    if(!env.CONTRACT_RECEIVE_KEY)return error("ยังไม่ได้ตั้งรหัสรับแฟ้ม",503);
    if(request.headers.get("X-Contract-Workflow-Key")!==env.CONTRACT_RECEIVE_KEY)return error("รหัสรับแฟ้มไม่ถูกต้อง",403);
   }
-  const at=new Date().toISOString(),field=action==="send"?"sent_at":"received_at",person=action==="send"?"sent_by":"received_by";
-  const condition=action==="send"?"sent_at IS NULL":"sent_at IS NOT NULL AND received_at IS NULL";
+  const f=workflowFields(stage,true),at=new Date().toISOString(),field=action==="send"?f.sent:f.received,person=action==="send"?f.sender:f.receiver;
+  const condition=action==="send"?"("+f.sent+" IS NULL OR "+f.sent+"='')":"("+f.sent+" IS NOT NULL AND "+f.sent+"<>'') AND ("+f.received+" IS NULL OR "+f.received+"='')";
   const result=await env.DB.prepare("UPDATE hospital_contract_register SET "+field+"=?,"+person+"=?,updated_at=? WHERE id=? AND "+condition).bind(at,actor,at,id).run();
   if(!result.meta?.changes)return error("ส่งแฟ้มก่อนรับ หรือรายการนี้ถูกบันทึกแล้ว",409);
   return Response.json({item:await get(id),ok:true});
