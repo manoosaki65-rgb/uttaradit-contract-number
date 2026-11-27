@@ -1,3 +1,4 @@
+import {importDrivePdf1} from "./drive-pdf1.js";
 import {workflowFields,ensureWorkflowColumns,workflowOutput} from "./workflow.js";
 import {handleHospital} from "./hospital.js";
 import {ensureAttachmentSchema, filesForRows, handleAttachmentRequest} from "./attachments.js";
@@ -133,6 +134,7 @@ export default {
   try{
    const cols=await schema(env);
    await ensureAttachmentSchema(env);
+   if(p==="/api/contracts/import-drive-pdf1" && request.method==="POST") return await importDrivePdf1(request,env);
    const handled=await handleAttachmentRequest(request,env,p);
    if(handled)return handled;
    const names=new Set(cols.map(c=>c.name));

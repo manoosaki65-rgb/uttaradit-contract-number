@@ -38,7 +38,7 @@
 <div id="currentFiles" class="documents"></div></div>
 <div class="actions wide"><button class="btn primary" id="save">บันทึก</button><button type="button" class="btn ghost" id="cancel" style="display:none">ยกเลิกแก้ไข</button><button type="button" class="btn danger" id="deleteEdit" style="display:none">ลบรายการ</button></div>
 </form></div>
-<div class="panel"><div class="bar"><div><b>รายการออกเลขสัญญา</b> <span class="muted" id="status"></span></div><input id="search" placeholder="ค้นหาเลขสัญญา / เรื่อง / ผู้ค้า / Inventory / ระยะเวลา / แหล่งเงิน"></div><div class="table"><table><thead><tr><th rowspan="2">เลขที่สัญญา</th><th rowspan="2">ลงวันที่</th><th rowspan="2">ระยะเวลา</th><th rowspan="2">รายการ</th><th rowspan="2">ผู้ค้า</th><th rowspan="2" class="right">วงเงิน</th><th rowspan="2">Inventory</th><th rowspan="2">ผู้ซื้อ</th><th rowspan="2">แหล่งเงิน</th><th colspan="2" class="group-one">1. สัญญา (หนังสือค้ำ)</th><th colspan="2" class="group-two">2. แฟ้มสัญญา (ตรวจรับ)</th><th rowspan="2">เอกสารสัญญา</th><th rowspan="2">จัดการ</th></tr><tr class="workflow-subhead"><th class="workflow-header-send">จัดซื้อ</th><th class="workflow-header-receive">พัสดุ</th><th class="workflow-header-send">จัดซื้อ</th><th class="workflow-header-receive">พัสดุ</th></tr></thead><tbody id="rows"></tbody></table></div></div></div><div id="quickDialog" class="quick-shade" hidden><section class="quick-panel" role="dialog" aria-modal="true" aria-labelledby="quickTitle">
+<div class="panel"><div class="bar"><div><b>รายการออกเลขสัญญา</b> <span class="muted" id="status"></span> <button type="button" class="btn ghost" id="importDrivePdf1">แนบ PDF1 อัตโนมัติจาก Google Drive</button></div><input id="search" placeholder="ค้นหาเลขสัญญา / เรื่อง / ผู้ค้า / Inventory / ระยะเวลา / แหล่งเงิน"></div><p class="muted" id="drivePdf1Status" role="status" style="white-space:pre-wrap" hidden></p><div class="table"><table><thead><tr><th rowspan="2">เลขที่สัญญา</th><th rowspan="2">ลงวันที่</th><th rowspan="2">ระยะเวลา</th><th rowspan="2">รายการ</th><th rowspan="2">ผู้ค้า</th><th rowspan="2" class="right">วงเงิน</th><th rowspan="2">Inventory</th><th rowspan="2">ผู้ซื้อ</th><th rowspan="2">แหล่งเงิน</th><th colspan="2" class="group-one">1. สัญญา (หนังสือค้ำ)</th><th colspan="2" class="group-two">2. แฟ้มสัญญา (ตรวจรับ)</th><th rowspan="2">เอกสารสัญญา</th><th rowspan="2">จัดการ</th></tr><tr class="workflow-subhead"><th class="workflow-header-send">จัดซื้อ</th><th class="workflow-header-receive">พัสดุ</th><th class="workflow-header-send">จัดซื้อ</th><th class="workflow-header-receive">พัสดุ</th></tr></thead><tbody id="rows"></tbody></table></div></div></div><div id="quickDialog" class="quick-shade" hidden><section class="quick-panel" role="dialog" aria-modal="true" aria-labelledby="quickTitle">
 <h3 id="quickTitle">แนบเอกสารสัญญา</h3><p class="msg" id="quickSubject"></p>
 <div class="actions"><button id="quickPick" type="button" class="btn primary">📎 เลือก PDF / Word จากเครื่อง</button><input type="file" id="quickFiles" accept=".pdf,.doc,.docx" multiple hidden></div>
 <p id="quickHint" class="msg"></p>
@@ -251,6 +251,26 @@ $("form").onsubmit=async e=>{
      alert("บันทึกทะเบียนสัญญาแล้ว แต่ไฟล์บางรายการยังแนบไม่สำเร็จ:\n"+failed.join("\n")+"\nกรุณาเลือกไฟล์แนบใหม่อีกครั้งในหน้าแก้ไข");
    }else{reset();toast(selected.length?"บันทึกและแนบไฟล์เรียบร้อย":"บันทึกทะเบียนแล้ว");}
  }catch(err){alert(err.message)}finally{$("save").disabled=false;}
+};
+let drivePdf1SessionKey="";
+$("importDrivePdf1").onclick=async()=>{
+ const key=drivePdf1SessionKey||prompt("กรอกรหัสนำเข้า PDF1");
+ if(!key)return;
+ const button=$("importDrivePdf1"),status=$("drivePdf1Status");
+ button.disabled=true;status.hidden=false;status.textContent="กำลังตรวจไฟล์ใน Google Drive…";
+ try{
+  const r=await fetch("/api/contracts/import-drive-pdf1",{method:"POST",headers:{"X-PDF1-Import-Key":key}});
+  const result=await r.json();
+  if(r.status===403)drivePdf1SessionKey="";
+  if(!r.ok)throw Error(result.error||"แนบ PDF1 ไม่สำเร็จ");
+  drivePdf1SessionKey=key;
+  status.textContent=[
+   ["แนบสำเร็จ",result.attached],["มีไฟล์แล้ว",result.alreadyAttached],
+   ["ไม่พบในทะเบียนจังหวัด",result.notFound],["มีข้อมูลซ้ำหรือมีการแก้ไขพร้อมกัน",result.ambiguous]
+  ].map(([label,items])=>label+" "+items.length+" รายการ"+(items.length?" • "+items.join(", "):"")).join("\n");
+  await load();
+ }catch(error){status.textContent=error.message;}
+ finally{button.disabled=false;}
 };
 $("cancel").onclick=reset;$("deleteEdit").onclick=()=>{if(EDIT)delRow(EDIT)};$("search").oninput=render;load();checkUpload();
 </script></body></html>
